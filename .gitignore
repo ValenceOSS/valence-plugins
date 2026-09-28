@@ -1,0 +1,7 @@
+node_modules/
+plugins/*/dist/
+packages/
+site/
+coverage/
+*.pem
+.tools/

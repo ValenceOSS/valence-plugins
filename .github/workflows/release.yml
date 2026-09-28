@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - name: Sign and release new versions
+        env:
+          VALENCE_PLUGIN_SIGNING_KEY: ${{ secrets.VALENCE_PLUGIN_SIGNING_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: pnpm exec tsx scripts/releasePlugins.ts
+      - name: Build and sign the catalogue
+        env:
+          VALENCE_PLUGIN_SIGNING_KEY: ${{ secrets.VALENCE_PLUGIN_SIGNING_KEY }}
+        run: >-
+          node .tools/valence-plugin.mjs catalogue packages
+          --key-id valence-official-2026
+          --package-url "https://github.com/${{ github.repository }}/releases/download/{id}-v{version}/{file}"
+          --source-url "https://github.com/${{ github.repository }}/tree/main/plugins/{id}"
+          --icon-url "https://valenceoss.github.io/valence-plugins/icons/{file}"
+          --out site
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4

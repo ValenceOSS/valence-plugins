@@ -1,0 +1,57 @@
+{
+  "manifestVersion": 2,
+  "id": "music-import",
+  "name": "Playlist import",
+  "version": "1.0.0",
+  "apiVersion": "^1.0",
+  "author": { "name": "Valence", "url": "https://github.com/ValenceOSS" },
+  "description": "Brings your Spotify and Apple Music playlists into Valence, and can request the albums of the songs your library does not have yet.",
+  "homepage": "https://github.com/ValenceOSS/valence-plugins/tree/main/plugins/music-import",
+  "permissions": [
+    {
+      "kind": "network",
+      "hosts": ["api.spotify.com", "accounts.spotify.com", "api.music.apple.com"]
+    },
+    {
+      "kind": "accounts",
+      "providers": [
+        {
+          "id": "spotify",
+          "name": "Spotify",
+          "authorizeUrl": "https://accounts.spotify.com/authorize",
+          "tokenUrl": "https://accounts.spotify.com/api/token",
+          "scopes": ["playlist-read-private", "playlist-read-collaborative"],
+          "clientIdSetting": "spotifyClientId",
+          "clientSecretSetting": "spotifyClientSecret"
+        }
+      ]
+    },
+    { "kind": "library", "access": "read" },
+    { "kind": "playlists", "access": "write" },
+    { "kind": "requests", "access": "create" },
+    { "kind": "storage", "quotaBytes": 10000000 },
+    { "kind": "notifications" }
+  ],
+  "contributes": {
+    "pages": [
+      { "id": "import", "title": "Import playlists", "placement": "account", "icon": "music" }
+    ],
+    "schedules": [{ "id": "continue", "label": "Finish playlist imports", "everyMinutes": 15 }]
+  },
+  "entry": "dist/plugin.js",
+  "settings": [
+    {
+      "id": "spotifyClientId",
+      "label": "Spotify client id",
+      "kind": "text",
+      "help": "Create an app at developer.spotify.com with Valence's redirect address."
+    },
+    { "id": "spotifyClientSecret", "label": "Spotify client secret", "kind": "secret" },
+    {
+      "id": "appleMusicToken",
+      "label": "Apple Music developer token",
+      "kind": "secret",
+      "help": "A MusicKit developer token, for reading public Apple Music playlists."
+    }
+  ]
+}

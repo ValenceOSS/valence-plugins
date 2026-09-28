@@ -1,0 +1,30 @@
+{
+  "name": "valence-plugins",
+  "private": true,
+  "description": "The official Valence plugins, and the signed catalogue every Valence server can install them from.",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsx scripts/buildPlugins.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "@valence/plugin-sdk": "github:ValenceOSS/Valence#feat/val-297-plugin-system&path:/packages/plugin-sdk",
+    "zod": "^4.6.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.28.2",
+    "prettier": "^3.6.2",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}
