@@ -14,7 +14,7 @@ const flatten = (blocks: readonly SurfaceBlock[]): SurfaceBlock[] =>
 
 const contextFor = (host: ReturnType<typeof aHost>['host']) => ({
   valence: host,
-  viewer: { profileId: 'p1', isAdmin: false },
+  viewer: { profileId: 'p1', isAdmin: false, nodes: [] },
   subject: null,
 });
 

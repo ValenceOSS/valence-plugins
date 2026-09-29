@@ -7,7 +7,7 @@ describe('renderSeriesPanel', () => {
     const { host } = aHost();
     const panel = await renderSeriesPanel({
       valence: host,
-      viewer: { profileId: 'p1', isAdmin: false },
+      viewer: { profileId: 'p1', isAdmin: false, nodes: [] },
       subject: { kind: 'series', id: 'frieren' },
     });
 
@@ -22,7 +22,7 @@ describe('renderSeriesPanel', () => {
     const panel = SurfaceSchema.parse(
       await renderSeriesPanel({
         valence: host,
-        viewer: { profileId: 'p1', isAdmin: false },
+        viewer: { profileId: 'p1', isAdmin: false, nodes: [] },
         subject: { kind: 'series', id: 'frieren' },
       }),
     );
@@ -41,7 +41,7 @@ describe('renderSeriesPanel', () => {
       (
         await renderSeriesPanel({
           valence: host,
-          viewer: { profileId: 'p1', isAdmin: false },
+          viewer: { profileId: 'p1', isAdmin: false, nodes: [] },
           subject: null,
         })
       ).blocks[0],

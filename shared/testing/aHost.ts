@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { vi } from 'vitest';
 import type { MediaRef, Stored, ValenceHost } from '@ValenceSDK/host/ValenceHost';
 
@@ -111,6 +112,15 @@ const aHost = (options: HostOptions = {}) => {
     },
     music: { findTrack: vi.fn<ValenceHost['music']['findTrack']>(() => Promise.resolve(null)) },
     notifications: { send: vi.fn(() => Promise.resolve()) },
+    events: { emit: vi.fn<ValenceHost['events']['emit']>(() => Promise.resolve()) },
+    crypto: {
+      hmac: vi.fn<ValenceHost['crypto']['hmac']>((algorithm, key, message, encoding = 'hex') =>
+        Promise.resolve(createHmac(algorithm, key).update(message).digest(encoding)),
+      ),
+      equal: vi.fn<ValenceHost['crypto']['equal']>((left, right) =>
+        Promise.resolve(left === right),
+      ),
+    },
   } satisfies ValenceHost;
 
   return { host, stored };
