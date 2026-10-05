@@ -22,8 +22,17 @@ describe('readPlaylistLink', () => {
     });
   });
 
+  it('reads a link whatever the case of its address', () => {
+    expect(readPlaylistLink('HTTPS://Open.Spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M')).toEqual({
+      source: 'spotify',
+      id: '37i9dQZF1DXcBWIGoYBM5M',
+    });
+  });
+
   it.each([
     'not a link',
+    'https://user@open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M',
+    'https://open.spotify.com.evil.example/playlist/37i9dQZF1DXcBWIGoYBM5M',
     'http://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M',
     'https://open.spotify.com/album/37i9dQZF1DXcBWIGoYBM5M',
     'https://open.spotify.com/playlist/../../x',

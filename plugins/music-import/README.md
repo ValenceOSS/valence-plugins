@@ -5,7 +5,9 @@ Brings your playlists from Spotify and Apple Music into Valence.
 - **From Spotify:** connect your account from **Account → Import playlists** and pick a playlist, or
   paste any public playlist link.
 - **From Apple Music:** paste a public playlist link.
-- Each song your library has goes into a new Valence playlist of the same name, in order.
+- Every song goes into a new Valence playlist of the same name, in order. A song your library does
+  not have is shown there as missing, with a way to request its album, and becomes the real song
+  once your library has it.
 - **Songs you do not have:** with the toggle on, the album of each missing song is requested, once
   per album, through Valence's requests, so it follows your server's approval rules.
 

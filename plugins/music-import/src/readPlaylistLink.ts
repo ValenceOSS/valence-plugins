@@ -1,24 +1,21 @@
 type PlaylistLink =
   { source: 'spotify'; id: string } | { source: 'apple'; id: string; storefront: string };
 
+const HTTPS_ADDRESS = /^https:\/\/([a-z0-9.-]+)(?::443)?(\/[^?#]*)?(?:[?#].*)?$/iu;
+
 /**
- * Reads a playlist's share link from Spotify or Apple Music.
+ * Reads a playlist's share link from Spotify or Apple Music, without `URL`, which a plugin's
+ * sandbox does not have.
  *
  * @param link - What somebody pasted.
  * @returns Which service and which playlist, or nothing where it is not a playlist link.
  */
 const readPlaylistLink = (link: string): PlaylistLink | null => {
-  let address: URL;
+  const address = HTTPS_ADDRESS.exec(link.trim());
+  const hostname = address?.[1]?.toLowerCase();
+  const parts = (address?.[2] ?? '').split('/').filter((part) => part !== '');
 
-  try {
-    address = new URL(link.trim());
-  } catch {
-    return null;
-  }
-
-  const parts = address.pathname.split('/').filter((part) => part !== '');
-
-  if (address.protocol === 'https:' && address.hostname === 'open.spotify.com') {
+  if (hostname === 'open.spotify.com') {
     const at = parts.indexOf('playlist');
     const id = parts[at + 1];
 
@@ -27,7 +24,7 @@ const readPlaylistLink = (link: string): PlaylistLink | null => {
       : null;
   }
 
-  if (address.protocol === 'https:' && address.hostname === 'music.apple.com') {
+  if (hostname === 'music.apple.com') {
     const [storefront, kind] = parts;
     const id = parts.at(-1);
 

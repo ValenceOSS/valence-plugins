@@ -19,8 +19,10 @@
     "paths": {
       "@ValenceSDK/*": ["./node_modules/@valence/plugin-sdk/src/*"],
       "@AniList/*": ["./plugins/anilist/src/*"],
+      "@ListenBrainz/*": ["./plugins/listenbrainz/src/*"],
       "@MusicImport/*": ["./plugins/music-import/src/*"],
-      "@Shared/*": ["./shared/*"]
+      "@Shared/*": ["./shared/*"],
+      "@Trakt/*": ["./plugins/trakt/src/*"]
     }
   },
   "include": ["plugins/*/src/**/*.ts", "shared/**/*.ts", "scripts/**/*.ts", "vitest.config.ts"]

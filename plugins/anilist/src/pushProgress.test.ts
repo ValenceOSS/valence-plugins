@@ -6,6 +6,8 @@ const finished = {
   occurredAt: '2026-09-28T12:00:00.000Z',
   profileId: 'p1',
   mediaId: 'e4',
+  positionSeconds: 1400,
+  durationSeconds: 1400,
 };
 
 describe('pushProgress', () => {

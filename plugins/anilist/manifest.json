@@ -2,7 +2,7 @@
   "manifestVersion": 2,
   "id": "anilist",
   "name": "AniList and MyAnimeList",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "apiVersion": "^1.0",
   "author": { "name": "Valence", "url": "https://github.com/ValenceOSS" },
   "description": "Imports what you have watched from AniList or MyAnimeList, marks those episodes watched in Valence, and keeps your list up to date as you watch.",
@@ -54,14 +54,19 @@
       "id": "anilistClientId",
       "label": "AniList client id",
       "kind": "text",
-      "help": "Create an API client at anilist.co/settings/developer with Valence's redirect address."
+      "help": "Create an API client at anilist.co/settings/developer with Valence's redirect address.",
+      "link": {
+        "label": "AniList developer settings",
+        "url": "https://anilist.co/settings/developer"
+      }
     },
     { "id": "anilistClientSecret", "label": "AniList client secret", "kind": "secret" },
     {
       "id": "malClientId",
       "label": "MyAnimeList client id",
       "kind": "text",
-      "help": "Create an API client at myanimelist.net/apiconfig with Valence's redirect address."
+      "help": "Create an API client at myanimelist.net/apiconfig with Valence's redirect address.",
+      "link": { "label": "MyAnimeList API config", "url": "https://myanimelist.net/apiconfig" }
     },
     { "id": "malClientSecret", "label": "MyAnimeList client secret", "kind": "secret" }
   ]
