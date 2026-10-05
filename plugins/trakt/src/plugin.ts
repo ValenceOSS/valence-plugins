@@ -26,7 +26,12 @@ definePlugin({
     const now = new Date();
 
     await startHistoryJob(valence, 'import', profileId, null, now);
-    await rememberAccount(valence, profileId);
+    await rememberAccount(valence, profileId).catch((failure: unknown) => {
+      valence.log.warn('Could not remember a connected Trakt account', {
+        profile: profileId,
+        problem: failure instanceof Error ? failure.message : 'unknown',
+      });
+    });
     await continueHistoryJob(valence, 'import', profileId, now);
   },
 });

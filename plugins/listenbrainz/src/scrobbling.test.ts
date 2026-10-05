@@ -77,7 +77,7 @@ describe('scrobbling', () => {
         }),
       },
     ]);
-    expect(stored.get('pending:p1')).toEqual([]);
+    expect(stored.has('pending:p1')).toBe(false);
   });
 
   it('says what is playing now when a song starts, without keeping it to resend', async () => {
@@ -173,7 +173,7 @@ describe('scrobbling', () => {
 
     expect(stored.has('listenbrainz:p1')).toBe(false);
     expect(stored.has('lastfm:p1')).toBe(false);
-    expect(stored.get('pending:p1')).toEqual([]);
+    expect(stored.has('pending:p1')).toBe(false);
     expect(host.notifications.send).toHaveBeenCalledWith(
       'p1',
       expect.objectContaining({ title: 'Last.fm disconnected' }),
@@ -195,7 +195,7 @@ describe('scrobbling', () => {
     await scrobble(host, { ...finished, mediaId: 's2' });
 
     expect(stored.get('listenbrainz:p1')).toEqual({ token: TOKEN, user: 'marques' });
-    expect(stored.get('pending:p1')).toEqual([]);
+    expect(stored.has('pending:p1')).toBe(false);
     expect(host.log.warn).toHaveBeenCalledWith('A scrobble was refused', {
       service: 'listenbrainz',
       reason: email,

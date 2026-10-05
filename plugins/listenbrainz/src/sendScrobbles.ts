@@ -37,7 +37,8 @@ const sendScrobbles = async (
   const read = PendingScrobblesSchema.safeParse(
     await valence.storage.get(pendingKeyFor(profileId)),
   );
-  const waiting = [...(read.success ? read.data : []), ...adding];
+  const stored = read.success ? read.data : [];
+  const waiting = [...stored, ...adding];
 
   if (waiting.length === 0) {
     return 0;
@@ -80,7 +81,9 @@ const sendScrobbles = async (
     await actOnOutcome(valence, profileId, each.service, outcome);
   }
 
-  await valence.storage.set(pendingKeyFor(profileId), kept.slice(-MOST_KEPT));
+  if (kept.length > 0 || stored.length > 0) {
+    await valence.storage.set(pendingKeyFor(profileId), kept.slice(-MOST_KEPT));
+  }
 
   return kept.length;
 };

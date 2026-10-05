@@ -119,7 +119,7 @@ const updatePlaylist = async (
 
     update.items.push({
       title: track.title,
-      artist: track.artists[1] ?? track.artists[0] ?? '',
+      artist: track.artist,
       album: track.album,
       releaseId: track.releaseId,
     });

@@ -130,6 +130,7 @@ const readListenBrainzPlaylist = async (
             {
               title: each.title,
               artists,
+              artist: credits[0] ?? artists[0] ?? '',
               album: each.album ?? null,
               releaseId:
                 each.extension?.[JSPF_TRACK]?.additional_metadata?.caa_release_mbid ?? null,

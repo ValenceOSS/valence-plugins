@@ -56,6 +56,7 @@ const readLovedTracks = async (
   const oldestFirst = tracks.reverse().map((track) => ({
     title: track.name,
     artists: [track.artist.name],
+    artist: track.artist.name,
     album: null,
     releaseId: null,
   }));
