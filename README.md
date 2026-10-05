@@ -3,10 +3,12 @@
 The official plugins for [Valence](https://github.com/ValenceOSS/Valence), and the signed catalogue
 every Valence server can install them from.
 
-| Plugin                                     | What it does                                                                                                        |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| [AniList and MyAnimeList](plugins/anilist) | Imports what you have watched, marks those episodes watched in Valence, and keeps your list up to date as you watch |
-| [Playlist import](plugins/music-import)    | Brings Spotify and Apple Music playlists into Valence, and can request the albums your library does not have yet    |
+| Plugin                                           | What it does                                                                                                              |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| [AniList and MyAnimeList](plugins/anilist)       | Imports what you have watched, marks those episodes watched in Valence, and keeps your list up to date as you watch       |
+| [Playlist import](plugins/music-import)          | Brings Spotify and Apple Music playlists into Valence, and can request the albums your library does not have yet          |
+| [Trakt](plugins/trakt)                           | Imports your Trakt watch history, marks it watched in Valence, and adds what you finish in Valence to Trakt               |
+| [ListenBrainz and Last.fm](plugins/listenbrainz) | Scrobbles what you play, and keeps Weekly Jams, Weekly Exploration, Daily Jams and your loved tracks as Valence playlists |
 
 ## Installing one
 
@@ -35,7 +37,7 @@ pnpm build       # bundles each plugin and packs it into packages/
 ```
 
 Each plugin is `manifest.json` plus TypeScript under `src/`, bundled by esbuild into one
-`dist/plugin.js`. `shared/` holds the helpers both use, and `shared/testing/aHost.ts` a stand-in
+`dist/plugin.js`. `shared/` holds the helpers they share, and `shared/testing/aHost.ts` a stand-in
 `valence` for tests.
 
 ## Releasing

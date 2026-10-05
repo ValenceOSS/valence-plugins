@@ -1,0 +1,46 @@
+{
+  "manifestVersion": 2,
+  "id": "trakt",
+  "name": "Trakt",
+  "version": "1.0.0",
+  "apiVersion": "^1.1",
+  "author": { "name": "Valence", "url": "https://github.com/ValenceOSS" },
+  "description": "Imports your Trakt watch history, marks those films and episodes watched in Valence, and sends what you finish in Valence to Trakt.",
+  "homepage": "https://github.com/ValenceOSS/valence-plugins/tree/main/plugins/trakt",
+  "permissions": [
+    { "kind": "network", "hosts": ["api.trakt.tv", "auth.trakt.tv"] },
+    {
+      "kind": "accounts",
+      "providers": [
+        {
+          "id": "trakt",
+          "name": "Trakt",
+          "authorizeUrl": "https://auth.trakt.tv/oauth/authorize",
+          "tokenUrl": "https://auth.trakt.tv/oauth/token",
+          "revokeUrl": "https://auth.trakt.tv/oauth/revoke",
+          "scopes": [],
+          "clientIdSetting": "traktClientId"
+        }
+      ]
+    },
+    { "kind": "library", "access": "read" },
+    { "kind": "viewing", "access": "write" },
+    { "kind": "storage", "quotaBytes": 5000000 },
+    { "kind": "notifications" }
+  ],
+  "contributes": {
+    "pages": [{ "id": "history", "title": "Trakt", "placement": "account", "icon": "tv" }],
+    "schedules": [{ "id": "sync", "label": "Sync Trakt history", "everyMinutes": 60 }],
+    "events": ["playback.finished"]
+  },
+  "entry": "dist/plugin.js",
+  "settings": [
+    {
+      "id": "traktClientId",
+      "label": "Trakt client id",
+      "kind": "text",
+      "help": "Create an API app at trakt.tv/oauth/applications with Valence's redirect address. Trakt signs in with PKCE, so no client secret is needed.",
+      "link": { "label": "Trakt API apps", "url": "https://trakt.tv/oauth/applications" }
+    }
+  ]
+}

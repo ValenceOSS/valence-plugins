@@ -49,7 +49,7 @@ const renderImport = async (
               type: 'notice',
               tone: 'success',
               title: `${job.name} imported`,
-              text: `${job.found.toString()} of ${job.tracks.length.toString()} songs are in your playlist${
+              text: `${job.found.toString()} of ${job.tracks.length.toString()} songs are in your library${
                 job.requested.length === 0
                   ? '.'
                   : `, and ${job.requested.length.toString()} albums were requested.`

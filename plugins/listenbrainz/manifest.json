@@ -1,0 +1,50 @@
+{
+  "manifestVersion": 2,
+  "id": "listenbrainz",
+  "name": "ListenBrainz and Last.fm",
+  "version": "1.0.0",
+  "apiVersion": "^1.2",
+  "author": { "name": "Valence", "url": "https://github.com/ValenceOSS" },
+  "description": "Scrobbles what you play to ListenBrainz and Last.fm, and keeps your ListenBrainz Weekly Jams, Weekly Exploration and Daily Jams and your Last.fm loved tracks as Valence playlists.",
+  "homepage": "https://github.com/ValenceOSS/valence-plugins/tree/main/plugins/listenbrainz",
+  "permissions": [
+    { "kind": "network", "hosts": ["api.listenbrainz.org", "ws.audioscrobbler.com"] },
+    { "kind": "library", "access": "read" },
+    { "kind": "viewing", "access": "read" },
+    { "kind": "playlists", "access": "write" },
+    { "kind": "requests", "access": "create" },
+    { "kind": "storage", "quotaBytes": 10000000 },
+    { "kind": "notifications" }
+  ],
+  "contributes": {
+    "pages": [
+      {
+        "id": "listening",
+        "title": "ListenBrainz and Last.fm",
+        "placement": "account",
+        "icon": "music"
+      }
+    ],
+    "schedules": [
+      { "id": "update", "label": "Update playlists and resend scrobbles", "everyMinutes": 60 }
+    ],
+    "events": ["playback.started", "playback.finished"]
+  },
+  "entry": "dist/plugin.js",
+  "settings": [
+    {
+      "id": "lastfmApiKey",
+      "label": "Last.fm API key",
+      "kind": "text",
+      "help": "Only Last.fm needs a key, from an API account at last.fm/api/account/create. ListenBrainz needs nothing here: each person connects it from their account.",
+      "link": { "label": "Last.fm API accounts", "url": "https://www.last.fm/api/account/create" }
+    },
+    { "id": "lastfmSharedSecret", "label": "Last.fm shared secret", "kind": "secret" },
+    {
+      "id": "requestMissingAlbums",
+      "label": "Request missing albums",
+      "kind": "toggle",
+      "help": "Requests the albums of songs in kept playlists that aren't in the library. Each person's request permissions and approval rules still apply."
+    }
+  ]
+}

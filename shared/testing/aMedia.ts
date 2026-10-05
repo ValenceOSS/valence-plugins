@@ -12,6 +12,9 @@ const aMedia = (changes: Partial<MediaRef> & Pick<MediaRef, 'id' | 'title'>): Me
   seriesId: null,
   seasonNumber: null,
   episodeNumber: null,
+  durationSeconds: null,
+  artist: null,
+  album: null,
   externalIds: {},
   ...changes,
 });

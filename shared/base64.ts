@@ -1,14 +1,16 @@
+import { utf8Bytes } from './utf8Bytes';
+
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 /**
- * Encodes text as base64, for a Basic authorisation header, without relying on `btoa` or `Buffer`,
- * neither of which a plugin's sandbox has.
+ * Encodes text as base64, for a Basic authorisation header, without relying on `btoa`, `Buffer` or
+ * `TextEncoder`, none of which a plugin's sandbox has.
  *
  * @param text - The text, encoded as UTF-8 first.
  * @returns The base64.
  */
 const base64 = (text: string): string => {
-  const bytes = new TextEncoder().encode(text);
+  const bytes = utf8Bytes(text);
   let out = '';
 
   for (let at = 0; at < bytes.length; at += 3) {

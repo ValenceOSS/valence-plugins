@@ -1,4 +1,4 @@
-import type { ValenceHost } from '@ValenceSDK/host/ValenceHost';
+import type { MissingSong, ValenceHost } from '@ValenceSDK/host/ValenceHost';
 import { jobKeyFor } from './jobKeyFor';
 import type { MusicImportJob } from './MusicImportJob';
 import { readMusicImportJob } from './readMusicImportJob';
@@ -6,8 +6,9 @@ import { readMusicImportJob } from './readMusicImportJob';
 const SONGS_AT_A_TIME = 25;
 
 /**
- * Carries a playlist import on by a few songs: adds each song the library has to the playlist in
- * order, and, where asked, requests the album of each song it does not, once per album. Finishes by
+ * Carries a playlist import on by a few songs: adds each song to the playlist in order, one the
+ * library does not have as a missing song in its place, which Valence fills in once it arrives, and,
+ * where asked, requests the album of each song it does not have, once per album. Finishes by
  * itself, and tells the importer how it went.
  *
  * @param valence - The host.
@@ -26,7 +27,7 @@ const continueMusicImport = async (
     return job;
   }
 
-  const adding: string[] = [];
+  const adding: (string | MissingSong)[] = [];
 
   for (const track of job.tracks.slice(job.next, job.next + SONGS_AT_A_TIME)) {
     const found = await valence.music.findTrack({
@@ -43,6 +44,7 @@ const continueMusicImport = async (
     }
 
     job.missing.push(`${track.title}, ${track.artist}`);
+    adding.push({ title: track.title, artist: track.artist, album: track.album });
 
     if (!job.shouldRequest) {
       continue;
@@ -68,7 +70,7 @@ const continueMusicImport = async (
 
   if (adding.length > 0) {
     await valence.playlists.add(profileId, job.playlistId, adding);
-    job.found += adding.length;
+    job.found += adding.filter((item) => typeof item === 'string').length;
   }
 
   job.next = Math.min(job.tracks.length, job.next + SONGS_AT_A_TIME);
@@ -77,7 +79,7 @@ const continueMusicImport = async (
     job.finishedAt = now.toISOString();
     await valence.notifications.send(profileId, {
       title: `${job.name} imported`,
-      body: `${job.found.toString()} of ${job.tracks.length.toString()} songs are in your playlist${
+      body: `${job.found.toString()} of ${job.tracks.length.toString()} songs are in your library${
         job.requested.length === 0
           ? '.'
           : `, and ${job.requested.length.toString()} albums were requested.`

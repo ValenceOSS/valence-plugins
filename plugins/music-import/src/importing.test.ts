@@ -62,7 +62,12 @@ describe('importing a playlist', () => {
       album: 'Silent Alarm',
       isrc: 'GB1',
     });
-    expect(host.playlists.add).toHaveBeenCalledWith('p1', 'playlist-1', ['t0']);
+    expect(host.playlists.add).toHaveBeenCalledWith('p1', 'playlist-1', [
+      't0',
+      { title: 'Song 1', artist: 'Bloc Party', album: null },
+      { title: 'Song 2', artist: 'Bloc Party', album: 'Silent Alarm' },
+      { title: 'Song 3', artist: 'Bloc Party', album: null },
+    ]);
     expect(host.requests.create).toHaveBeenCalledTimes(1);
     expect(job).toMatchObject({
       found: 1,
@@ -72,7 +77,7 @@ describe('importing a playlist', () => {
     expect(job?.missing).toHaveLength(3);
     expect(host.notifications.send).toHaveBeenCalledWith('p1', {
       title: 'Running imported',
-      body: '1 of 4 songs are in your playlist, and 1 albums were requested.',
+      body: '1 of 4 songs are in your library, and 1 albums were requested.',
     });
   });
 
@@ -102,7 +107,7 @@ describe('importing a playlist', () => {
     expect((await continueMusicImport(asked.host, 'p1', NOW))?.requested).toEqual([]);
     expect(asked.host.notifications.send).toHaveBeenCalledWith('p1', {
       title: 'Running imported',
-      body: '0 of 1 songs are in your playlist.',
+      body: '0 of 1 songs are in your library.',
     });
   });
 

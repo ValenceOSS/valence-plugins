@@ -5,3 +5,4 @@ site/
 coverage/
 *.pem
 .tools/
+.DS_Store
