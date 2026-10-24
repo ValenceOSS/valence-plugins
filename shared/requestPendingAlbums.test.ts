@@ -40,7 +40,7 @@ describe('requestPendingAlbums', () => {
     expect(host.notifications.send).not.toHaveBeenCalled();
   });
 
-  it('keeps a playlist whose albums could not be asked for just now, says what was, and carries on with the next', async () => {
+  it('keeps a playlist with an album that could not be asked for just now, says what was, and carries on', async () => {
     const { host, stored } = aHost();
 
     stored.set('requestMissing:p1:playlist-1', { playlistId: 'playlist-1', name: 'Running' });
@@ -64,8 +64,8 @@ describe('requestPendingAlbums', () => {
     expect(stored.has('requestMissing:p1:playlist-2')).toBe(false);
     expect(host.notifications.send).toHaveBeenCalledTimes(2);
     expect(host.log.warn).toHaveBeenCalledWith(
-      'Could not request the albums of a playlist just now',
-      expect.objectContaining({ playlist: 'playlist-1' }),
+      'Could not request an album just now',
+      expect.objectContaining({ playlist: 'playlist-1', album: 'second' }),
     );
   });
 

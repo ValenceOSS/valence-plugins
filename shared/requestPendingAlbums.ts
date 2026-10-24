@@ -10,7 +10,8 @@ import { PendingRequestSchema } from './PendingRequest';
  * still matching, or one left over when the run's time is up, is picked up again on the next run,
  * and nothing already requested is asked for twice. A playlist whose albums couldn't be asked for
  * just now, because the requests service didn't answer, is kept for the next run without holding up
- * the others. The person is told how many albums were requested.
+ * the others, and one album that can't be requested doesn't hold up the rest of its playlist. The
+ * person is told how many albums were requested.
  *
  * @param valence - The host.
  * @param times - When to stop starting another playlist, and when to stop requesting altogether,
@@ -48,24 +49,34 @@ const requestPendingAlbums = async (
         continue;
       }
 
-      let isCut = false;
+      let isUnfinished = false;
 
       for (const album of found.albums.filter((each) => !each.isInLibrary && !each.isRequested)) {
         if (Date.now() >= times.stopBy) {
-          isCut = true;
+          isUnfinished = true;
 
           break;
         }
 
-        const asked = await valence.requests.create(profileId, {
-          catalogueId: album.catalogueId,
-          kind: 'album',
-        });
+        try {
+          const asked = await valence.requests.create(profileId, {
+            catalogueId: album.catalogueId,
+            kind: 'album',
+          });
 
-        made += asked.status === 'made' ? 1 : 0;
+          made += asked.status === 'made' ? 1 : 0;
+        } catch (failure) {
+          isUnfinished = true;
+          valence.log.warn('Could not request an album just now', {
+            profile: profileId,
+            playlist: pending.data.playlistId,
+            album: album.catalogueId,
+            problem: failure instanceof Error ? failure.message : 'unknown',
+          });
+        }
       }
 
-      if (!found.isMatching && !isCut) {
+      if (!found.isMatching && !isUnfinished) {
         await valence.storage.delete(key);
       }
     } catch (failure) {

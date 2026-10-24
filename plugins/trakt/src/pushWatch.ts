@@ -40,7 +40,14 @@ const pushWatch = async (valence: ValenceHost, event: PluginEvent): Promise<bool
     return false;
   }
 
-  const session = await traktSessionFor(valence, event.profileId).catch(() => 'notNow' as const);
+  const session = await traktSessionFor(valence, event.profileId).catch((failure: unknown) => {
+    valence.log.warn('Could not renew the Trakt connection just now', {
+      profile: event.profileId,
+      problem: failure instanceof Error ? failure.message : 'unknown',
+    });
+
+    return 'notNow' as const;
+  });
 
   if (session === null) {
     return false;

@@ -27,7 +27,9 @@ const startImport = async (
   const read = await Promise.all(
     lists.map(({ provider, token }) => {
       if (token === null) {
-        throw new Error(`The ${provider} connection could not be renewed just now`);
+        throw new Error(
+          `The ${provider === 'anilist' ? 'AniList' : 'MyAnimeList'} connection could not be renewed just now`,
+        );
       }
 
       return provider === 'anilist'

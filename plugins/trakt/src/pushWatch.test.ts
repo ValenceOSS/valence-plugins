@@ -128,6 +128,10 @@ describe('pushWatch', () => {
     expect(await pushWatch(host, finished)).toBe(false);
     expect(host.http.fetch).not.toHaveBeenCalled();
     expect([...stored.keys()].filter((key) => key.startsWith('push:'))).toHaveLength(1);
+    expect(host.log.warn).toHaveBeenCalledWith('Could not renew the Trakt connection just now', {
+      profile: 'p1',
+      problem: 'Trakt could not renew it (503)',
+    });
 
     await syncEveryone(host, new Date(finished.occurredAt));
 

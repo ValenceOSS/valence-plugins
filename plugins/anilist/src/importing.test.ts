@@ -51,7 +51,7 @@ describe('importing a list', () => {
     host.accounts.connection.mockRejectedValueOnce(new Error('AniList could not renew it (503)'));
 
     await expect(startImport(host, 'p1', NOW)).rejects.toThrow(
-      'The anilist connection could not be renewed just now',
+      'The AniList connection could not be renewed just now',
     );
     expect(await readImportJob(host, 'p1')).toBeNull();
   });
