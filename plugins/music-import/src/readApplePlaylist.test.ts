@@ -49,6 +49,7 @@ describe('readApplePlaylist', () => {
         { title: 'One', artist: 'Robyn', album: 'Body Talk', isrc: 'SE1' },
         { title: 'Two', artist: 'Robyn', album: null, isrc: null },
       ],
+      isCut: false,
     });
     expect(host.http.fetch.mock.calls[0]?.[1]).toEqual({
       headers: { authorization: 'Bearer dev' },

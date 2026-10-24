@@ -1,12 +1,14 @@
 /**
- * Spotify answering for a two-page playlist and a user's playlists, for tests.
+ * Spotify answering as its 2026 API does, for tests: a two-page playlist the person made, one they
+ * only follow, and two pages of their playlists.
  *
  * @param url - What was asked.
  * @returns Spotify's answer.
  */
 const spotifyAnswers = (url: string): { status: number; text: string } => {
   const track = (name: string, isrc?: string) => ({
-    track: {
+    item: {
+      type: 'track',
       name,
       artists: [{ name: 'Bloc Party' }],
       album: { name: 'Silent Alarm' },
@@ -14,18 +16,38 @@ const spotifyAnswers = (url: string): { status: number; text: string } => {
     },
   });
 
-  if (url === 'https://accounts.spotify.com/api/token') {
-    return { status: 200, text: JSON.stringify({ access_token: 'client-token' }) };
+  if (url === 'https://api.spotify.com/v1/me') {
+    return { status: 200, text: JSON.stringify({ id: 'me' }) };
   }
 
-  if (url.startsWith('https://api.spotify.com/v1/me/playlists')) {
+  if (url === 'https://api.spotify.com/v1/me/playlists?limit=50') {
     return {
       status: 200,
       text: JSON.stringify({
         items: [
-          { id: 'mix1', name: 'Running', tracks: { total: 12 } },
-          { id: 'mix2', name: 'Empty', tracks: null },
+          { id: 'mix1', name: 'Running', owner: { id: 'me' }, items: { total: 12 } },
+          { id: 'theirs', name: 'Followed', owner: { id: 'someone' }, items: { total: 40 } },
+          null,
         ],
+        next: 'https://api.spotify.com/v1/me/playlists?offset=50&limit=50',
+      }),
+    };
+  }
+
+  if (url === 'https://api.spotify.com/v1/me/playlists?offset=50&limit=50') {
+    return {
+      status: 200,
+      text: JSON.stringify({
+        items: [
+          {
+            id: 'shared',
+            name: 'Together',
+            collaborative: true,
+            owner: { id: 'friend' },
+            items: null,
+          },
+        ],
+        next: null,
       }),
     };
   }
@@ -35,16 +57,24 @@ const spotifyAnswers = (url: string): { status: number; text: string } => {
       status: 200,
       text: JSON.stringify({
         name: 'Running',
-        tracks: {
-          items: [track('Helicopter', 'GBAAA0500001'), { track: null }],
-          next: 'https://api.spotify.com/v1/playlists/mix1/tracks?offset=100',
+        items: {
+          items: [
+            track('Helicopter', 'GBAAA0500001'),
+            { item: null },
+            { item: { type: 'episode', name: 'A podcast' } },
+          ],
+          next: 'https://api.spotify.com/v1/playlists/mix1/items?offset=100',
         },
       }),
     };
   }
 
-  if (url === 'https://api.spotify.com/v1/playlists/mix1/tracks?offset=100') {
+  if (url === 'https://api.spotify.com/v1/playlists/mix1/items?offset=100') {
     return { status: 200, text: JSON.stringify({ items: [track('Banquet')], next: null }) };
+  }
+
+  if (url.startsWith('https://api.spotify.com/v1/playlists/theirs?')) {
+    return { status: 200, text: JSON.stringify({ name: 'Followed' }) };
   }
 
   return { status: 404, text: '' };

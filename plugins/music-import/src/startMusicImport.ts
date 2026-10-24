@@ -1,7 +1,10 @@
 import type { ValenceHost } from '@ValenceSDK/host/ValenceHost';
+import { cutTo } from '@Shared/cutTo';
 import { jobKeyFor } from './jobKeyFor';
 import type { MusicImportJob } from './MusicImportJob';
 import type { SourcePlaylist } from './SourcePlaylist';
+
+const MOST_NAME_CHARACTERS = 100;
 
 /**
  * Starts importing a playlist: makes the Valence playlist the songs will go into, and keeps the
@@ -10,7 +13,7 @@ import type { SourcePlaylist } from './SourcePlaylist';
  * @param valence - The host.
  * @param profileId - Who is importing, and whose playlist it becomes.
  * @param playlist - The playlist read from Spotify or Apple Music.
- * @param shouldRequest - Whether to ask for the songs the library does not have.
+ * @param shouldRequest - Whether to ask for the albums of the songs the library does not have.
  * @param now - The time now.
  * @returns The new import.
  */
@@ -21,20 +24,26 @@ const startMusicImport = async (
   shouldRequest: boolean,
   now: Date,
 ): Promise<MusicImportJob> => {
+  const name =
+    playlist.name.trim() === ''
+      ? 'Imported playlist'
+      : cutTo(playlist.name.trim(), MOST_NAME_CHARACTERS);
   const made = await valence.playlists.create(profileId, {
-    name: playlist.name,
+    name,
     description: `Imported from ${playlist.source === 'spotify' ? 'Spotify' : 'Apple Music'}`,
   });
   const job: MusicImportJob = {
     source: playlist.source,
-    name: playlist.name,
+    name,
     tracks: playlist.tracks,
     next: 0,
     playlistId: made.id,
     found: 0,
     missing: [],
-    requested: [],
     shouldRequest,
+    isCut: playlist.isCut,
+    total: playlist.tracks.length,
+    isStopped: false,
     startedAt: now.toISOString(),
     finishedAt: null,
   };

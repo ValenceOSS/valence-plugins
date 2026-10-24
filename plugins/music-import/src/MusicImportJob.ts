@@ -9,8 +9,10 @@ const MusicImportJobSchema = z.object({
   playlistId: z.string(),
   found: z.number(),
   missing: z.array(z.string()),
-  requested: z.array(z.string()),
   shouldRequest: z.boolean(),
+  isCut: z.boolean().default(false),
+  total: z.number().nullable().default(null),
+  isStopped: z.boolean().default(false),
   startedAt: z.string(),
   finishedAt: z.string().nullable(),
 });

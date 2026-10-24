@@ -108,6 +108,56 @@ describe('the import page', () => {
     expect(blocks.some((block) => block.type === 'textField')).toBe(false);
   });
 
+  it('waits for an import under way before starting another', async () => {
+    const { host, stored } = aHost({
+      connections: { 'p1:spotify': { accessToken: 'mine', account: null } },
+      answers: spotifyAnswers,
+    });
+
+    stored.set('import:p1', {
+      source: 'apple',
+      name: 'Long',
+      tracks: [],
+      next: 0,
+      playlistId: 'playlist-9',
+      found: 0,
+      missing: [],
+      shouldRequest: false,
+      startedAt: NOW.toISOString(),
+      finishedAt: null,
+    });
+
+    const page = await actOnImport(
+      contextFor(host),
+      { action: { id: 'import-spotify', payload: { playlist: 'mix1' } }, fields: {} },
+      NOW,
+    );
+
+    expect(page.blocks[0]).toEqual({
+      type: 'notice',
+      tone: 'danger',
+      text: 'Long is still importing. Start another once it has finished.',
+    });
+    expect(host.playlists.create).not.toHaveBeenCalled();
+  });
+
+  it('still shows when Spotify cannot list the playlists', async () => {
+    const { host } = aHost({
+      connections: { 'p1:spotify': { accessToken: 'mine', account: null } },
+      answers: () => ({ status: 503, text: '' }),
+    });
+    const blocks = flatten(SurfaceSchema.parse(await renderImport(contextFor(host))).blocks);
+
+    expect(blocks).toContainEqual(
+      expect.objectContaining({
+        type: 'notice',
+        tone: 'warning',
+        text: 'Your Spotify playlists could not be listed. Try again in a moment.',
+      }),
+    );
+    expect(blocks).toContainEqual(expect.objectContaining({ type: 'textField', field: 'link' }));
+  });
+
   it('says why a link could not be imported', async () => {
     const say = async (
       fields: Record<string, string | boolean>,
@@ -126,7 +176,7 @@ describe('the import page', () => {
     );
     expect(await say({})).toBe('That is not a Spotify or Apple Music playlist link.');
     expect(await say({ link: 'https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M' })).toBe(
-      'Connect Spotify first, or ask an administrator to add Spotify’s client id and secret.',
+      'Connect Spotify first. It shares the songs of playlists you made or collaborate on.',
     );
     expect(await say({ link: 'https://music.apple.com/gb/playlist/x/pl.abcdefgh1' })).toBe(
       'An administrator needs to add an Apple Music developer token in this plugin’s settings.',
@@ -146,5 +196,90 @@ describe('the import page', () => {
       (await actOnImport(contextFor(host), { action: { id: 'unknown' }, fields: {} }, NOW))
         .blocks[0]?.type,
     ).not.toBe('notice');
+  });
+
+  it('keeps every label within what a page may show, however long the names', async () => {
+    const long = 'x'.repeat(100);
+    const { host, stored } = aHost({
+      connections: { 'p1:spotify': { accessToken: 'mine', account: null } },
+      answers: (url) =>
+        url === 'https://api.spotify.com/v1/me'
+          ? { status: 200, text: JSON.stringify({ id: 'me' }) }
+          : {
+              status: 200,
+              text: JSON.stringify({
+                items: Array.from({ length: 50 }, (_, at) => ({
+                  id: `${url.length.toString()}-${at.toString()}`,
+                  name: `${long}\u202e${long}`,
+                  owner: { id: 'me' },
+                  items: { total: 1 },
+                })),
+                next: url.includes('offset=450')
+                  ? null
+                  : `${url.split('&offset')[0] ?? ''}&offset=${(Number(url.split('offset=')[1] ?? '0') + 50).toString()}`,
+              }),
+            },
+    });
+
+    stored.set('import:p1', {
+      source: 'spotify',
+      name: long,
+      tracks: [],
+      next: 0,
+      playlistId: 'playlist-1',
+      found: 0,
+      missing: [`${'y'.repeat(300)}, ${'z'.repeat(300)}`],
+      shouldRequest: false,
+      startedAt: NOW.toISOString(),
+      finishedAt: NOW.toISOString(),
+    });
+
+    const page = SurfaceSchema.safeParse(await renderImport(contextFor(host)));
+
+    expect(page.success).toBe(true);
+
+    stored.set('import:p1', {
+      source: 'spotify',
+      name: long,
+      tracks: [{ title: 't', artist: 'a', album: null, isrc: null }],
+      next: 0,
+      playlistId: 'playlist-1',
+      found: 0,
+      missing: [],
+      shouldRequest: false,
+      startedAt: NOW.toISOString(),
+      finishedAt: null,
+    });
+
+    expect(SurfaceSchema.safeParse(await renderImport(contextFor(host))).success).toBe(true);
+  });
+
+  it('stops an import when asked, keeping what it added', async () => {
+    const { host, stored } = aHost();
+
+    stored.set('import:p1', {
+      source: 'apple',
+      name: 'Long',
+      tracks: [{ title: 't', artist: 'a', album: null, isrc: null }],
+      next: 0,
+      playlistId: 'playlist-1',
+      found: 0,
+      missing: [],
+      shouldRequest: true,
+      startedAt: NOW.toISOString(),
+      finishedAt: null,
+    });
+
+    const blocks = flatten(
+      (await actOnImport(contextFor(host), { action: { id: 'stop' }, fields: {} }, NOW)).blocks,
+    );
+
+    expect(stored.get('import:p1')).toMatchObject({
+      isStopped: true,
+      finishedAt: NOW.toISOString(),
+    });
+    expect(stored.has('requestMissing:p1:playlist-1')).toBe(false);
+    expect(host.notifications.send).not.toHaveBeenCalled();
+    expect(blocks).toContainEqual(expect.objectContaining({ type: 'textField', field: 'link' }));
   });
 });

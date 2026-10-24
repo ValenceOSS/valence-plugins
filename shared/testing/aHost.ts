@@ -283,7 +283,7 @@ const aHost = (options: HostOptions = {}) => {
         );
       }),
     },
-    notifications: { send: vi.fn(() => Promise.resolve()) },
+    notifications: { send: vi.fn<ValenceHost['notifications']['send']>(() => Promise.resolve()) },
     events: { emit: vi.fn<ValenceHost['events']['emit']>(() => Promise.resolve()) },
     crypto: {
       hmac: vi.fn<ValenceHost['crypto']['hmac']>((algorithm, key, message, encoding = 'hex') =>
