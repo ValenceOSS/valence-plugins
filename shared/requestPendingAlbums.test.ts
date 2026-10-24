@@ -2,11 +2,11 @@ import { aHost } from './testing/aHost';
 import { requestPendingAlbums } from './requestPendingAlbums';
 
 const ALBUM = {
-  catalogueId: 'silent-alarm',
+  catalogueId: 'quiet-harbour',
   kind: 'album' as const,
-  title: 'Silent Alarm',
+  title: 'Quiet Harbour',
   year: 2005,
-  artist: 'Bloc Party',
+  artist: 'The Lanterns',
   isInLibrary: false,
   isRequested: false,
 };
@@ -38,6 +38,35 @@ describe('requestPendingAlbums', () => {
     expect(await requestPendingAlbums(host, later())).toBe(0);
     expect(stored.has('requestMissing:p1:playlist-1')).toBe(true);
     expect(host.notifications.send).not.toHaveBeenCalled();
+  });
+
+  it('keeps a playlist whose albums could not be asked for just now, says what was, and carries on with the next', async () => {
+    const { host, stored } = aHost();
+
+    stored.set('requestMissing:p1:playlist-1', { playlistId: 'playlist-1', name: 'Running' });
+    stored.set('requestMissing:p1:playlist-2', { playlistId: 'playlist-2', name: 'Walking' });
+    host.requests.missingAlbums.mockImplementation((_profileId, playlistId) =>
+      Promise.resolve({
+        isMatching: false,
+        albums:
+          playlistId === 'playlist-1'
+            ? [ALBUM, { ...ALBUM, catalogueId: 'second' }]
+            : [{ ...ALBUM, catalogueId: 'third' }],
+      }),
+    );
+    host.requests.create
+      .mockResolvedValueOnce({ status: 'made' })
+      .mockRejectedValueOnce(new Error('The requests service couldn’t take the request just now.'))
+      .mockResolvedValueOnce({ status: 'made' });
+
+    expect(await requestPendingAlbums(host, later())).toBe(2);
+    expect(stored.has('requestMissing:p1:playlist-1')).toBe(true);
+    expect(stored.has('requestMissing:p1:playlist-2')).toBe(false);
+    expect(host.notifications.send).toHaveBeenCalledTimes(2);
+    expect(host.log.warn).toHaveBeenCalledWith(
+      'Could not request the albums of a playlist just now',
+      expect.objectContaining({ playlist: 'playlist-1' }),
+    );
   });
 
   it('lets go of a playlist that is gone, and starts nothing once the time is up', async () => {

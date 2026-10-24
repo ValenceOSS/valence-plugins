@@ -10,7 +10,8 @@ import { SeriesLinkSchema } from './SeriesLink';
 /**
  * When somebody finishes an episode of a programme their import matched, tells each list they have
  * connected, on the entry for that episode's season, that they watched it, if they asked for that.
- * Each list is read first, so progress only rises.
+ * Each list is read first, so progress only rises. A list Valence couldn't renew the connection to
+ * just now is passed over this time, and the next episode finished brings it up to date.
  *
  * @param valence - The host.
  * @param event - What happened.
@@ -59,6 +60,7 @@ const pushProgress = async (valence: ValenceHost, event: PluginEvent): Promise<n
 
     if (
       id !== null &&
+      token !== null &&
       (await saveProgress(valence, provider, token, id, at - entry.offset + 1, entry.episodes))
     ) {
       changed += 1;

@@ -120,6 +120,23 @@ describe('pushWatch', () => {
     ).toHaveLength(2);
   });
 
+  it('keeps a finish when Valence can’t renew the connection just then, and sends it in the next run', async () => {
+    const { host, stored } = aHost({ ...connected, library: traktLibrary() });
+
+    host.accounts.connection.mockRejectedValueOnce(new Error('Trakt could not renew it (503)'));
+
+    expect(await pushWatch(host, finished)).toBe(false);
+    expect(host.http.fetch).not.toHaveBeenCalled();
+    expect([...stored.keys()].filter((key) => key.startsWith('push:'))).toHaveLength(1);
+
+    await syncEveryone(host, new Date(finished.occurredAt));
+
+    expect([...stored.keys()].filter((key) => key.startsWith('push:'))).toEqual([]);
+    expect(
+      host.http.fetch.mock.calls.filter(([url]) => url === 'https://api.trakt.tv/sync/history'),
+    ).toHaveLength(1);
+  });
+
   it('sends the same finish only once within a few hours', async () => {
     const { host } = aHost({ ...connected, library: traktLibrary() });
 

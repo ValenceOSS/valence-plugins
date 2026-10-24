@@ -240,9 +240,10 @@ describe('importing a playlist', () => {
     expect(await continueEveryone(host, NOW)).toBe(1);
     expect(host.playlists.add).toHaveBeenCalledTimes(2);
     expect(host.log.warn).toHaveBeenCalledWith(
-      'Could not request the albums of an imported playlist',
-      { problem: 'requests offline' },
+      'Could not request the albums of a playlist just now',
+      { profile: 'p1', playlist: 'playlist-9', problem: 'requests offline' },
     );
+    expect(stored.has('requestMissing:p1:playlist-9')).toBe(true);
   });
 
   it('stops once the songs being added are in, when asked to stop while they are added', async () => {

@@ -9,7 +9,9 @@ import { readMalEntries } from './readMalEntries';
 /**
  * Starts importing somebody's lists: reads every connected list, keeps what they have begun or
  * finished watching, and folds a show on both lists into one entry carrying both ids and the
- * furthest progress. The work itself happens a few shows at a time, in `continueImport`.
+ * furthest progress. The work itself happens a few shows at a time, in `continueImport`. A list
+ * Valence couldn't renew the connection to just now fails the import, rather than importing the
+ * others alone, so it is tried again whole.
  *
  * @param valence - The host.
  * @param profileId - Whose lists.
@@ -23,9 +25,15 @@ const startImport = async (
 ): Promise<ImportJob> => {
   const lists = await connectedLists(valence, profileId);
   const read = await Promise.all(
-    lists.map(({ provider, token }) =>
-      provider === 'anilist' ? readAniListEntries(valence, token) : readMalEntries(valence, token),
-    ),
+    lists.map(({ provider, token }) => {
+      if (token === null) {
+        throw new Error(`The ${provider} connection could not be renewed just now`);
+      }
+
+      return provider === 'anilist'
+        ? readAniListEntries(valence, token)
+        : readMalEntries(valence, token);
+    }),
   );
   const byMal = new Map<string, AnimeEntry>();
   const entries: AnimeEntry[] = [];
