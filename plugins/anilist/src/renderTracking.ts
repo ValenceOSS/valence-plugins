@@ -1,6 +1,7 @@
 import type { SurfaceContext } from '@ValenceSDK/host/PluginDefinition';
 import type { Surface } from '@ValenceSDK/surface/SurfaceSchema';
 import type { SurfaceBlock } from '@ValenceSDK/surface/SurfaceBlockSchema';
+import { shownAs } from '@Shared/shownAs';
 import { connectedLists } from './connectedLists';
 import { PROVIDERS } from './PROVIDERS';
 import { readImportJob } from './readImportJob';
@@ -31,7 +32,10 @@ const renderTracking = async ({ valence, viewer }: SurfaceContext): Promise<Surf
       return {
         type: 'row',
         label: provider.name,
-        detail: connection.account === null ? 'Connected' : `Connected as ${connection.account}`,
+        detail:
+          connection.account === null
+            ? 'Connected'
+            : shownAs(`Connected as ${connection.account}`, 120),
         icon: 'check',
         action: {
           id: 'valence.accounts.disconnect',
@@ -88,7 +92,7 @@ const renderTracking = async ({ valence, viewer }: SurfaceContext): Promise<Surf
                     title: 'Not found in your library',
                     rows: job.unmatched
                       .slice(0, MOST_UNMATCHED_SHOWN)
-                      .map((title) => ({ type: 'row' as const, label: title })),
+                      .map((title) => ({ type: 'row' as const, label: shownAs(title, 120) })),
                   },
                 ]),
           ];

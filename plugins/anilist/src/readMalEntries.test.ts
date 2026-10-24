@@ -6,10 +6,10 @@ const page = (id: number, next?: string) => ({
     {
       node: {
         id,
-        title: 'Sousou no Frieren',
+        title: 'Rei no Bouken',
         num_episodes: id === 1 ? 0 : 28,
         start_season: { year: 2023 },
-        alternative_titles: { en: 'Frieren', synonyms: [] },
+        alternative_titles: { en: 'Example Quest', synonyms: [] },
       },
       list_status: { status: 'on_hold', num_episodes_watched: 5, is_rewatching: id === 2 },
     },
@@ -36,6 +36,6 @@ describe('readMalEntries', () => {
       ['1', 'paused', null],
       ['2', 'repeating', 28],
     ]);
-    expect(entries[0]?.titles).toEqual(['Frieren', 'Sousou no Frieren']);
+    expect(entries[0]?.titles).toEqual(['Example Quest', 'Rei no Bouken']);
   });
 });

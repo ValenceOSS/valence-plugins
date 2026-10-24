@@ -1,6 +1,7 @@
 import type { MediaRef, ValenceHost } from '@ValenceSDK/host/ValenceHost';
 import { normaliseTitle } from '@Shared/normaliseTitle';
-import type { AnimeEntry } from './AnimeEntry';
+
+const MOST_SEARCH_CHARACTERS = 200;
 
 /**
  * Finds the programme in the library that a list entry is about: by its AniList or MyAnimeList id
@@ -8,10 +9,15 @@ import type { AnimeEntry } from './AnimeEntry';
  * year no more than one out, so a similar name is never mistaken for the show.
  *
  * @param valence - The host.
- * @param entry - The list entry.
+ * @param entry - The show, or one of its seasons, as the lists know it.
+ * @param isByTitleToo - Whether to look by title where the ids find nothing.
  * @returns The programme, or nothing where the library has no clear match.
  */
-const findSeriesFor = async (valence: ValenceHost, entry: AnimeEntry): Promise<MediaRef | null> => {
+const findSeriesFor = async (
+  valence: ValenceHost,
+  entry: { anilistId: string | null; malId: string | null; titles: string[]; year: number | null },
+  isByTitleToo = true,
+): Promise<MediaRef | null> => {
   const byId = [
     ...(entry.anilistId === null
       ? []
@@ -19,13 +25,16 @@ const findSeriesFor = async (valence: ValenceHost, entry: AnimeEntry): Promise<M
     ...(entry.malId === null ? [] : await valence.library.findByExternalId('mal', entry.malId)),
   ].find((media) => media.kind === 'series');
 
-  if (byId !== undefined) {
-    return byId;
+  if (byId !== undefined || !isByTitleToo) {
+    return byId ?? null;
   }
 
   const wanted = new Set(entry.titles.map(normaliseTitle));
 
-  for (const title of entry.titles.slice(0, 3)) {
+  for (const title of entry.titles
+    .map((each) => each.trim())
+    .filter((each) => each !== '' && each.length <= MOST_SEARCH_CHARACTERS)
+    .slice(0, 3)) {
     const matches = (await valence.library.search(title, ['series'])).filter(
       (media) =>
         wanted.has(normaliseTitle(media.title)) &&

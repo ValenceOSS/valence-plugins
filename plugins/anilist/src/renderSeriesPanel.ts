@@ -1,33 +1,36 @@
-import { z } from 'zod';
 import type { SurfaceContext } from '@ValenceSDK/host/PluginDefinition';
+import type { SurfaceBlock } from '@ValenceSDK/surface/SurfaceBlockSchema';
 import type { Surface } from '@ValenceSDK/surface/SurfaceSchema';
-import { seriesKeyFor } from './seriesKeyFor';
-
-const MatchSchema = z.object({
-  anilistId: z.string().nullable(),
-  malId: z.string().nullable(),
-  title: z.string(),
-});
+import { shownAs } from '@Shared/shownAs';
+import { linkKeyFor } from './linkKeyFor';
+import { SeriesLinkSchema } from './SeriesLink';
 
 /**
- * A programme's panel: which anime it was matched to, with a way to open it on each list, or a
- * word that it has not been matched yet.
+ * A programme's panel for the person looking: which entries on their lists it was matched to, one
+ * per season the lists count, with a way to open each, or a word that their import hasn't matched
+ * it yet. Nobody sees another person's list.
  *
- * @param context - The host and the programme being looked at.
+ * @param context - The host, who is looking, and the programme.
  * @returns The panel.
  */
-const renderSeriesPanel = async ({ valence, subject }: SurfaceContext): Promise<Surface> => {
-  const match =
+const renderSeriesPanel = async ({
+  valence,
+  viewer,
+  subject,
+}: SurfaceContext): Promise<Surface> => {
+  const link =
     subject === null
       ? null
-      : MatchSchema.safeParse(await valence.storage.get(seriesKeyFor(subject.id)));
+      : SeriesLinkSchema.safeParse(
+          await valence.storage.get(linkKeyFor(viewer.profileId, subject.id)),
+        );
 
-  if (match === null || !match.success) {
+  if (link === null || !link.success || link.data.entries.length === 0) {
     return {
       blocks: [
         {
           type: 'text',
-          text: 'Not matched to an anime yet. Importing your list from the Anime tracking page matches it.',
+          text: 'Not matched to your anime list yet. Importing your list from the Anime tracking page matches it.',
           tone: 'muted',
         },
       ],
@@ -35,27 +38,37 @@ const renderSeriesPanel = async ({ valence, subject }: SurfaceContext): Promise<
   }
 
   return {
-    blocks: [
-      { type: 'row', label: match.data.title, detail: 'Matched on your anime list', icon: 'tv' },
-      ...(match.data.anilistId === null
+    blocks: link.data.entries.flatMap((entry): SurfaceBlock[] => [
+      {
+        type: 'row',
+        label: shownAs(entry.title, 120),
+        detail:
+          link.data.entries.length === 1
+            ? 'Matched on your anime list'
+            : entry.episodes === null
+              ? `From episode ${(entry.offset + 1).toString()}`
+              : `Episodes ${(entry.offset + 1).toString()} to ${(entry.offset + entry.episodes).toString()}`,
+        icon: 'tv',
+      },
+      ...(entry.anilistId === null
         ? []
         : [
             {
               type: 'link' as const,
               label: 'Open on AniList',
-              url: `https://anilist.co/anime/${match.data.anilistId}`,
+              url: `https://anilist.co/anime/${entry.anilistId}`,
             },
           ]),
-      ...(match.data.malId === null
+      ...(entry.malId === null
         ? []
         : [
             {
               type: 'link' as const,
               label: 'Open on MyAnimeList',
-              url: `https://myanimelist.net/anime/${match.data.malId}`,
+              url: `https://myanimelist.net/anime/${entry.malId}`,
             },
           ]),
-    ],
+    ]),
   };
 };
 

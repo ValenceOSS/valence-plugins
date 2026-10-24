@@ -8,7 +8,7 @@ describe('renderSeriesPanel', () => {
     const panel = await renderSeriesPanel({
       valence: host,
       viewer: { profileId: 'p1', isAdmin: false, nodes: [] },
-      subject: { kind: 'series', id: 'frieren' },
+      subject: { kind: 'series', id: 'example' },
     });
 
     expect(panel.blocks[0]).toMatchObject({ type: 'text' });
@@ -17,13 +17,18 @@ describe('renderSeriesPanel', () => {
   it('links a matched programme to each list', async () => {
     const { host, stored } = aHost();
 
-    stored.set('series:frieren', { anilistId: '154587', malId: '52991', title: 'Frieren' });
+    stored.set('link:p1:example', {
+      entries: [
+        { anilistId: '1001', malId: '2001', title: 'Example Quest', offset: 0, episodes: 12 },
+        { anilistId: '1002', malId: null, title: 'Example Quest 2', offset: 12, episodes: null },
+      ],
+    });
 
     const panel = SurfaceSchema.parse(
       await renderSeriesPanel({
         valence: host,
         viewer: { profileId: 'p1', isAdmin: false, nodes: [] },
-        subject: { kind: 'series', id: 'frieren' },
+        subject: { kind: 'series', id: 'example' },
       }),
     );
 
@@ -31,7 +36,33 @@ describe('renderSeriesPanel', () => {
       panel.blocks
         .filter((block) => block.type === 'link')
         .map((block) => (block.type === 'link' ? block.url : '')),
-    ).toEqual(['https://anilist.co/anime/154587', 'https://myanimelist.net/anime/52991']);
+    ).toEqual([
+      'https://anilist.co/anime/1001',
+      'https://myanimelist.net/anime/2001',
+      'https://anilist.co/anime/1002',
+    ]);
+    expect(panel.blocks.filter((block) => block.type === 'row')).toMatchObject([
+      { label: 'Example Quest', detail: 'Episodes 1 to 12' },
+      { label: 'Example Quest 2', detail: 'From episode 13' },
+    ]);
+  });
+
+  it('shows one person’s matches to nobody else', async () => {
+    const { host, stored } = aHost();
+
+    stored.set('link:p1:example', {
+      entries: [
+        { anilistId: '1001', malId: null, title: 'Example Quest', offset: 0, episodes: 12 },
+      ],
+    });
+
+    const panel = await renderSeriesPanel({
+      valence: host,
+      viewer: { profileId: 'p2', isAdmin: false, nodes: [] },
+      subject: { kind: 'series', id: 'example' },
+    });
+
+    expect(panel.blocks).toEqual([expect.objectContaining({ type: 'text' })]);
   });
 
   it('says nothing is matched when there is no programme', async () => {
