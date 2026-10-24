@@ -18,6 +18,9 @@ const BUDGET_MS = 12_000;
 /** The most a run spends reading one person's history pages. */
 const PAGES_BUDGET_MS = 8_000;
 
+/** The least time worth starting to read someone's history pages with. */
+const LEAST_PAGES_MS = 3_000;
+
 const STARTS_FROM = 'syncStartsFrom';
 
 /**
@@ -84,7 +87,11 @@ const syncEveryone = async (
 
       await resendWatches(valence, profile.id, session, now);
 
-      const left = Math.max(0, Math.min(PAGES_BUDGET_MS, deadline - Date.now()));
+      const left = Math.min(PAGES_BUDGET_MS, deadline - Date.now());
+
+      if (left < LEAST_PAGES_MS) {
+        break;
+      }
 
       const imported = await readHistoryJob(valence, 'import', profile.id);
 

@@ -5,7 +5,7 @@ import { sendWatches } from './sendWatches';
 import type { TraktSession } from './TraktSession';
 
 /** The most finishes sent again in one call. */
-const AT_ONCE = 100;
+const AT_ONCE = 20;
 
 /** How old a waiting finish may get before it is let go. */
 const MOST_AGE_MS = 14 * 24 * 3_600_000;
@@ -52,7 +52,7 @@ const resendWatches = async (
   );
 
   if (outcome === 'wait') {
-    return keys.length;
+    return (await valence.storage.keys(pushKeyFor(profileId))).length;
   }
 
   for (const { key } of sending) {

@@ -10,19 +10,22 @@ const AnswerSchema = z.object({
   added: z.object({ movies: z.number().optional(), episodes: z.number().optional() }).optional(),
 });
 
-const NOT_TAKEN = new Set([429, 502, 503, 504]);
+const NOT_TAKEN = new Set([429, 502, 503, 504, 521, 522, 525, 526]);
 
-const THEIRS_TO_PUT_RIGHT = new Set([410, 423]);
+const PUT_RIGHT_LATER = new Set([401, 403, 410, 423]);
+
+const CUT_OFF = /took too long|ECONNRESET|socket hang up/u;
 
 type Outcome = 'sent' | 'notFound' | 'nothingToSend' | 'wait' | 'uncertain' | 'refused';
 
 /**
  * Adds finished films and episodes to somebody's Trakt history in one call, each at the time it was
  * finished, since Trakt takes one post a second from a person. What the call came to decides what
- * becomes of them: Trakt busy or overloaded, or the person's account locked or deactivated, which
- * they can put right, means wait and send again; an answer that leaves it unclear whether Trakt
- * kept them means don't, since Trakt keeps every play it is sent and a second send would count
- * twice; and Trakt taking the call but finding none of them is told apart from adding them.
+ * becomes of them. Trakt not reached, busy or overloaded, or a sign-in, client id or account that
+ * can be put right, means wait and send again. A call cut off part way, or a server error, leaves it
+ * unclear whether Trakt kept them, so they aren't sent again, since Trakt keeps every play it is
+ * sent and a second send would count twice. Trakt taking the call but finding none of them is told
+ * apart from adding them.
  *
  * @param valence - The host.
  * @param session - Their Trakt session.
@@ -58,13 +61,13 @@ const sendWatches = async (
   const answer = await askTrakt(valence, session, '/sync/history', {
     ...(movies.length === 0 ? {} : { movies }),
     ...(shows.length === 0 ? {} : { shows }),
-  }).catch(() => null);
+  }).catch((failure: unknown) => (failure instanceof Error ? failure.message : 'unknown'));
 
-  if (answer === null) {
-    return 'uncertain';
+  if (typeof answer === 'string') {
+    return CUT_OFF.test(answer) ? 'uncertain' : 'wait';
   }
 
-  if (NOT_TAKEN.has(answer.status) || THEIRS_TO_PUT_RIGHT.has(answer.status)) {
+  if (NOT_TAKEN.has(answer.status) || PUT_RIGHT_LATER.has(answer.status)) {
     return 'wait';
   }
 

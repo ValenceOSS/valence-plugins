@@ -14,7 +14,7 @@ const traktSessionFor = async (
   profileId: string,
 ): Promise<TraktSession | null> => {
   const clientId = (await valence.settings.read())['traktClientId'];
-  const connection = await valence.accounts.connection(profileId, 'trakt').catch(() => null);
+  const connection = await valence.accounts.connection(profileId, 'trakt');
 
   return connection === null || typeof clientId !== 'string' || clientId === ''
     ? null

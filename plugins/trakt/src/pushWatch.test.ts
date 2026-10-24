@@ -187,4 +187,19 @@ describe('pushWatch', () => {
     });
     expect([...stored.keys()].filter((key) => key.startsWith('push:'))).toEqual([]);
   });
+
+  it('keeps a finish when Trakt can’t be reached, or its sign-in needs putting right, and lets one cut off part way go', async () => {
+    for (const [answers, isKept] of [
+      [() => Promise.reject(new Error('getaddrinfo ENOTFOUND api.trakt.tv')), true],
+      [() => Promise.reject(new Error('The plugin’s request took too long.')), false],
+      [() => Promise.resolve({ status: 403, text: '', headers: {} }), true],
+    ] as const) {
+      const { host, stored } = aHost({ ...connected, library: traktLibrary() });
+
+      host.http.fetch.mockImplementation(answers);
+      await pushWatch(host, finished);
+
+      expect([...stored.keys()].some((key) => key.startsWith('push:'))).toBe(isKept);
+    }
+  });
 });

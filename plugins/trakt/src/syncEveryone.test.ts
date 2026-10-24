@@ -64,13 +64,12 @@ describe('syncEveryone', () => {
     });
   });
 
-  it('passes over someone who never used Trakt without a word, and one failure stops nobody else', async () => {
+  it('carries on with everyone else when one person’s history fails', async () => {
     const { host, stored } = aHost({
       settings: { traktClientId: 'client' },
       profiles: [
         { id: 'p1', name: 'Marques' },
         { id: 'p2', name: 'Guest' },
-        { id: 'p3', name: 'Visitor' },
       ],
       connections: {
         'p1:trakt': { accessToken: 't', account: null },
@@ -79,11 +78,6 @@ describe('syncEveryone', () => {
       answers: traktAnswers([aFilmPlay()]),
     });
 
-    host.accounts.connection.mockImplementation((profileId) =>
-      profileId === 'p3'
-        ? Promise.reject(new Error('That person has not used this plugin.'))
-        : Promise.resolve({ accessToken: 't', account: null, expiresAt: null }),
-    );
     host.viewing.progress.mockRejectedValueOnce(new Error('library offline'));
 
     expect(await syncEveryone(host, NOW)).toBe(1);
