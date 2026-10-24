@@ -9,8 +9,9 @@ Keeps what you watch in Valence and your Trakt history in step.
   listed, so you can see what is missing.
 - **Send what you finish:** when you finish a film or an episode in Valence, it is added to your
   Trakt history. Finishing the same one again within its own length, such as in the credits and
-  then at the end, counts as the same viewing. One Trakt can't take just then is sent again by the
-  hourly run. You can turn this off.
+  then at the end, counts as the same viewing. One Trakt can't take just then, or one finished
+  while Valence can't renew your connection, is sent again by the hourly run, for up to two weeks;
+  if your connection has to be made again, it is sent once you have. You can turn this off.
 - **Once a day:** the plays added to Trakt since the last check are read, so watching in other apps
   reaches Valence too. Plays added on Trakt with an earlier date arrive when you import again.
 

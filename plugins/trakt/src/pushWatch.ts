@@ -21,9 +21,9 @@ const RecentSchema = z.array(z.object({ mediaId: z.string(), at: z.number() }));
  * finished, if they have Trakt connected and have not turned this off. Finishing the same thing
  * again within its own length, such as stopping in the credits and then once more at the end,
  * counts as the same viewing and isn't sent twice, since Trakt keeps every play it is sent. A
- * finish Trakt can't take just then waits for the hourly run. Each is logged with what became of
- * it, so an operator can tell where a watch went. Songs and books are none of Trakt's business, and
- * pass without a word.
+ * finish Trakt can't take just then, or that finds Valence unable to renew the connection just
+ * then, waits for the hourly run. Each is logged with what became of it, so an operator can tell
+ * where a watch went. Songs and books are none of Trakt's business, and pass without a word.
  *
  * @param valence - The host.
  * @param event - What happened.
@@ -40,7 +40,14 @@ const pushWatch = async (valence: ValenceHost, event: PluginEvent): Promise<bool
     return false;
   }
 
-  const session = await traktSessionFor(valence, event.profileId);
+  const session = await traktSessionFor(valence, event.profileId).catch((failure: unknown) => {
+    valence.log.warn('Could not renew the Trakt connection just now', {
+      profile: event.profileId,
+      problem: failure instanceof Error ? failure.message : 'unknown',
+    });
+
+    return 'notNow' as const;
+  });
 
   if (session === null) {
     return false;
@@ -70,7 +77,7 @@ const pushWatch = async (valence: ValenceHost, event: PluginEvent): Promise<bool
   }
 
   const push = { mediaId: event.mediaId, watchedAt: event.occurredAt };
-  const outcome = await sendWatches(valence, session, [push]);
+  const outcome = session === 'notNow' ? 'wait' : await sendWatches(valence, session, [push]);
 
   if (outcome === 'nothingToSend') {
     valence.log.info('Did not send a finish to Trakt: not a film or a numbered episode', about);

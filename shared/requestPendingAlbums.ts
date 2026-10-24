@@ -8,8 +8,10 @@ import { PendingRequestSchema } from './PendingRequest';
  * finds the albums — only exact matches — and each one not in the library or asked for already is
  * requested, by the person's own request permissions and approval rules. A playlist Valence is
  * still matching, or one left over when the run's time is up, is picked up again on the next run,
- * and nothing already requested is asked for twice. The person is told how many albums were
- * requested.
+ * and nothing already requested is asked for twice. A playlist whose albums couldn't be asked for
+ * just now, because the requests service didn't answer, is kept for the next run without holding up
+ * the others, and one album that can't be requested doesn't hold up the rest of its playlist. The
+ * person is told how many albums were requested.
  *
  * @param valence - The host.
  * @param times - When to stop starting another playlist, and when to stop requesting altogether,
@@ -36,37 +38,56 @@ const requestPendingAlbums = async (
       continue;
     }
 
-    const found = await valence.requests.missingAlbums(profileId, pending.data.playlistId);
-
-    if (found === null) {
-      await valence.storage.delete(key);
-
-      continue;
-    }
-
     let made = 0;
-    let isCut = false;
 
-    for (const album of found.albums.filter((each) => !each.isInLibrary && !each.isRequested)) {
-      if (Date.now() >= times.stopBy) {
-        isCut = true;
+    try {
+      const found = await valence.requests.missingAlbums(profileId, pending.data.playlistId);
 
-        break;
+      if (found === null) {
+        await valence.storage.delete(key);
+
+        continue;
       }
 
-      const asked = await valence.requests.create(profileId, {
-        catalogueId: album.catalogueId,
-        kind: 'album',
-      });
+      let isUnfinished = false;
 
-      made += asked.status === 'made' ? 1 : 0;
+      for (const album of found.albums.filter((each) => !each.isInLibrary && !each.isRequested)) {
+        if (Date.now() >= times.stopBy) {
+          isUnfinished = true;
+
+          break;
+        }
+
+        try {
+          const asked = await valence.requests.create(profileId, {
+            catalogueId: album.catalogueId,
+            kind: 'album',
+          });
+
+          made += asked.status === 'made' ? 1 : 0;
+        } catch (failure) {
+          isUnfinished = true;
+          valence.log.warn('Could not request an album just now', {
+            profile: profileId,
+            playlist: pending.data.playlistId,
+            album: album.catalogueId,
+            problem: failure instanceof Error ? failure.message : 'unknown',
+          });
+        }
+      }
+
+      if (!found.isMatching && !isUnfinished) {
+        await valence.storage.delete(key);
+      }
+    } catch (failure) {
+      valence.log.warn('Could not request the albums of a playlist just now', {
+        profile: profileId,
+        playlist: pending.data.playlistId,
+        problem: failure instanceof Error ? failure.message : 'unknown',
+      });
     }
 
     requested += made;
-
-    if (!found.isMatching && !isCut) {
-      await valence.storage.delete(key);
-    }
 
     if (made > 0) {
       await valence.notifications.send(profileId, {

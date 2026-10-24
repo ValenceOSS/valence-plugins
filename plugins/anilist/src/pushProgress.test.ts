@@ -53,6 +53,35 @@ describe('pushProgress', () => {
     ]);
   });
 
+  it('still tells one list when Valence can’t renew the other’s connection just then', async () => {
+    const { host, stored } = aHost({
+      connections: {
+        'p1:anilist': { accessToken: 'a', account: null },
+        'p1:mal': { accessToken: 'm', account: null },
+      },
+      library: exampleLibrary(),
+      answers: aniListAnswers([]),
+    });
+    const kept = host.accounts.connection.getMockImplementation();
+
+    host.accounts.connection.mockImplementation((profileId: string, provider: string) =>
+      provider === 'mal'
+        ? Promise.reject(new Error('MyAnimeList could not renew it (503)'))
+        : (kept?.(profileId, provider) ?? Promise.resolve(null)),
+    );
+    stored.set('link:p1:example', LINK);
+
+    expect(await pushProgress(host, finished('s2e1'))).toBe(1);
+    expect(host.http.fetch.mock.calls.some(([url]) => String(url).includes('myanimelist'))).toBe(
+      false,
+    );
+    expect(host.log.warn).toHaveBeenCalledWith('Could not renew a list’s connection just now', {
+      profile: 'p1',
+      provider: 'mal',
+      problem: 'MyAnimeList could not renew it (503)',
+    });
+  });
+
   it('tells nobody about an episode no import matched, or when the viewer turned it off', async () => {
     const { host, stored } = aHost({
       connections: { 'p1:anilist': { accessToken: 'a', account: null } },

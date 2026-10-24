@@ -42,6 +42,20 @@ describe('importing a list', () => {
     ]);
   });
 
+  it('fails rather than importing one list alone when Valence can’t renew the other just then', async () => {
+    const { host } = aHost({
+      connections: { ...connected, 'p1:mal': { accessToken: 'm', account: null } },
+      answers: aniListAnswers([anAniListEntry({ progress: 2 })]),
+    });
+
+    host.accounts.connection.mockRejectedValueOnce(new Error('AniList could not renew it (503)'));
+
+    await expect(startImport(host, 'p1', NOW)).rejects.toThrow(
+      'The AniList connection could not be renewed just now',
+    );
+    expect(await readImportJob(host, 'p1')).toBeNull();
+  });
+
   it('marks the watched episodes Valence does not know about, keeps the match for the viewer, and finishes', async () => {
     const { host, stored } = aHost({
       connections: connected,
