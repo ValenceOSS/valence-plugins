@@ -17,7 +17,9 @@ await build({
   logLevel: 'warning',
 });
 
-for (const plugin of readdirSync('plugins')) {
+for (const plugin of readdirSync('plugins', { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name)) {
   await build({
     entryPoints: [join('plugins', plugin, 'src', 'plugin.ts')],
     bundle: true,
