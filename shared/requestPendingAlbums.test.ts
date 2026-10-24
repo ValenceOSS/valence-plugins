@@ -40,8 +40,10 @@ describe('requestPendingAlbums', () => {
     expect(host.notifications.send).not.toHaveBeenCalled();
   });
 
-  it('lets go of a playlist that is gone, and starts nothing once the time is up', async () => {
-    const { host, stored } = aHost();
+  it('lets go of a playlist only once it is gone, and starts nothing once the time is up', async () => {
+    const { host, stored, playlists } = aHost({
+      playlists: [{ id: 'playlist-1', name: 'Running', profileId: 'p1', entries: [] }],
+    });
 
     stored.set('requestMissing:p1:playlist-1', { playlistId: 'playlist-1', name: 'Running' });
     host.requests.missingAlbums.mockResolvedValue(null);
@@ -50,6 +52,11 @@ describe('requestPendingAlbums', () => {
 
     expect(host.requests.missingAlbums).not.toHaveBeenCalled();
 
+    await requestPendingAlbums(host, later());
+
+    expect(stored.size).toBe(1);
+
+    playlists.delete('playlist-1');
     await requestPendingAlbums(host, later());
 
     expect(stored.size).toBe(0);

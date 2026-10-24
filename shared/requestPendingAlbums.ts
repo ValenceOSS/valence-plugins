@@ -7,9 +7,9 @@ import { PendingRequestSchema } from './PendingRequest';
  * Requests the albums of playlists' missing songs, for the person each playlist belongs to. Valence
  * finds the albums — only exact matches — and each one not in the library or asked for already is
  * requested, by the person's own request permissions and approval rules. A playlist Valence is
- * still matching, or one left over when the run's time is up, is picked up again on the next run,
- * and nothing already requested is asked for twice. The person is told how many albums were
- * requested.
+ * still matching, can't match just then, or one left over when the run's time is up, is picked up
+ * again on the next run; one is let go only once its Valence playlist is gone. Nothing already
+ * requested is asked for twice. The person is told how many albums were requested.
  *
  * @param valence - The host.
  * @param times - When to stop starting another playlist, and when to stop requesting altogether,
@@ -39,7 +39,13 @@ const requestPendingAlbums = async (
     const found = await valence.requests.missingAlbums(profileId, pending.data.playlistId);
 
     if (found === null) {
-      await valence.storage.delete(key);
+      const playlist = await valence.playlists
+        .read(profileId, pending.data.playlistId)
+        .catch(() => undefined);
+
+      if (playlist === null) {
+        await valence.storage.delete(key);
+      }
 
       continue;
     }
