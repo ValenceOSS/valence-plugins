@@ -21,7 +21,12 @@ const listenFor = async (valence: ValenceHost, event: PluginEvent): Promise<List
     return null;
   }
 
-  const durationSeconds = event.durationSeconds ?? media.durationSeconds;
+  const durationSeconds =
+    event.durationSeconds !== null && event.durationSeconds > 0
+      ? event.durationSeconds
+      : media.durationSeconds !== null && media.durationSeconds > 0
+        ? media.durationSeconds
+        : null;
 
   return {
     title: media.title,

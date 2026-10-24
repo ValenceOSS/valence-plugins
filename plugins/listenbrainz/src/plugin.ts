@@ -1,5 +1,6 @@
 import { definePlugin } from '@ValenceSDK/host/definePlugin';
 import { actOnListening } from './actOnListening';
+import { forgetProfile } from './forgetProfile';
 import { renderListening } from './renderListening';
 import { scrobble } from './scrobble';
 import { updateEveryone } from './updateEveryone';
@@ -17,6 +18,10 @@ definePlugin({
     },
   },
   events: async (event, { valence }) => {
-    await scrobble(valence, event);
+    if (event.topic === 'profile.removed' && event.profileId !== null) {
+      await forgetProfile(valence, event.profileId);
+    } else {
+      await scrobble(valence, event);
+    }
   },
 });

@@ -2,10 +2,11 @@ type Answer = { status: number; text: string };
 
 /**
  * Last.fm answering for tests: a sign-in token, a session once `isAllowed` says the person allowed
- * it, their loved songs newest first, and scrobbles answered as the test says.
+ * it, their loved songs newest first, and scrobbles answered as the test says, each one
+ * accepted or ignored with the code the test gives.
  *
- * @param options - Whether the sign-in was allowed, the loved songs, and the error code scrobbling
- *   answers with, if any.
+ * @param options - Whether the sign-in was allowed, the loved songs, the error code scrobbling
+ *   answers with, if any, and the code each scrobble is ignored with, by its place in the call.
  * @returns A web that answers Last.fm.
  */
 const lastfmAnswers =
@@ -14,6 +15,7 @@ const lastfmAnswers =
       isAllowed?: () => boolean;
       loved?: { name: string; artist: string }[];
       scrobbleError?: number;
+      ignored?: Record<number, number>;
     } = {},
   ) =>
   (url: string, init: { body?: string }): Answer => {
@@ -68,13 +70,26 @@ const lastfmAnswers =
     }
 
     if (method === 'track.scrobble' || method === 'track.updateNowPlaying') {
+      const count = [...params.keys()].filter((key) => key.startsWith('artist[')).length;
+      const codes = Array.from({ length: count }, (_, at) => options.ignored?.[at] ?? 0);
+
       return options.scrobbleError === undefined
         ? {
             status: 200,
-            text: JSON.stringify({ scrobbles: { '@attr': { accepted: 1, ignored: 0 } } }),
+            text: JSON.stringify({
+              scrobbles: {
+                scrobble: codes.map((code) => ({
+                  ignoredMessage: { code: code.toString(), '#text': code === 0 ? '' : 'Ignored' },
+                })),
+                '@attr': {
+                  accepted: codes.filter((code) => code === 0).length,
+                  ignored: codes.filter((code) => code !== 0).length,
+                },
+              },
+            }),
           }
         : {
-            status: options.scrobbleError === 9 ? 403 : 503,
+            status: [9, 10, 26].includes(options.scrobbleError) ? 403 : 503,
             text: JSON.stringify({ error: options.scrobbleError, message: 'No' }),
           };
     }

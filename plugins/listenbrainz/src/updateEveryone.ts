@@ -5,7 +5,8 @@ import { readLinks } from './readLinks';
 import type { MadeFor } from './readListenBrainzPlaylist';
 import { readPreferences } from './readPreferences';
 import { readShouldRequest } from './readShouldRequest';
-import { requestPendingAlbums } from './requestPendingAlbums';
+import { requestPendingAlbums } from '@Shared/requestPendingAlbums';
+import { forgetProfile } from './forgetProfile';
 import { sendScrobbles } from './sendScrobbles';
 import { updatePlaylist } from './updatePlaylist';
 
@@ -43,29 +44,75 @@ const updateEveryone = async (
     stopBy: startedAt + REQUESTS_STOP_AFTER_MS,
   };
 
-  if (shouldRequest) {
-    await requestPendingAlbums(valence, requestTimes);
+  const askForAlbums = async () => {
+    if (shouldRequest) {
+      await requestPendingAlbums(valence, requestTimes).catch((failure: unknown) => {
+        valence.log.warn('Could not request the albums of a kept playlist', {
+          problem: failure instanceof Error ? failure.message : 'unknown',
+        });
+      });
+    }
+  };
+  const profiles = await valence.profiles.list();
+  const everyone = new Set(profiles.map((profile) => profile.id));
+
+  const gone = new Set<string>();
+
+  for (const prefix of ['listenbrainz:', 'lastfm:', 'preferences:', 'pending:']) {
+    for (const key of await valence.storage.keys(prefix)) {
+      const profileId = key.slice(prefix.length).split(':')[0] ?? '';
+
+      if (profileId !== '' && !everyone.has(profileId)) {
+        gone.add(profileId);
+      }
+    }
   }
+
+  for (const profileId of gone) {
+    await forgetProfile(valence, profileId).catch((failure: unknown) => {
+      valence.log.warn('Could not let go of a removed profile', {
+        profile: profileId,
+        problem: failure instanceof Error ? failure.message : 'unknown',
+      });
+    });
+  }
+
+  await askForAlbums();
 
   const keys = await readLastfmKeys(valence);
   const madeFor: MadeFor = new Map();
   let updated = 0;
 
-  for (const profile of await valence.profiles.list()) {
-    const links = await readLinks(valence, profile.id);
-
-    if (Date.now() >= deadline || (links.listenbrainz === null && links.lastfm === null)) {
-      continue;
-    }
-
-    await sendScrobbles(valence, profile.id).catch((failure: unknown) => {
-      valence.log.warn('Could not send scrobbles for a profile', {
+  for (const profile of profiles) {
+    const links = await readLinks(valence, profile.id).catch((failure: unknown) => {
+      valence.log.warn('Could not read the services a profile connected', {
         profile: profile.id,
         problem: failure instanceof Error ? failure.message : 'unknown',
       });
+
+      return null;
     });
 
-    const { keep } = await readPreferences(valence, profile.id);
+    if (
+      links === null ||
+      Date.now() >= deadline ||
+      (links.listenbrainz === null && links.lastfm === null)
+    ) {
+      continue;
+    }
+
+    await sendScrobbles(valence, profile.id, [], Math.max(0, deadline - Date.now())).catch(
+      (failure: unknown) => {
+        valence.log.warn('Could not send scrobbles for a profile', {
+          profile: profile.id,
+          problem: failure instanceof Error ? failure.message : 'unknown',
+        });
+      },
+    );
+
+    const { keep } = await readPreferences(valence, profile.id).catch((): { keep: string[] } => ({
+      keep: [],
+    }));
 
     for (const source of PLAYLIST_SOURCES.filter((each) => keep.includes(each.id))) {
       if (Date.now() >= deadline) {
@@ -101,9 +148,7 @@ const updateEveryone = async (
     }
   }
 
-  if (shouldRequest) {
-    await requestPendingAlbums(valence, requestTimes);
-  }
+  await askForAlbums();
 
   return updated;
 };

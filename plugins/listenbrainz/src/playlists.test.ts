@@ -396,4 +396,21 @@ describe('the page', () => {
 
     expect(stored.get('preferences:p1')).toEqual({ scrobble: false, keep: ['weekly-jams'] });
   });
+
+  it('makes the playlist only once, even when the run that made it fails before finishing', async () => {
+    const { host, playlists } = listenBrainzHost([
+      [weekly(WEEK_ONE, [{ title: 'Low Tide', creator: 'Mara Quill' }])],
+    ]);
+
+    host.playlists.add.mockRejectedValueOnce(new Error('library busy'));
+    await keep(host, { keepWeeklyJams: true }).catch(() => undefined);
+    await updateEveryone(host, later(0.1));
+
+    expect([...playlists.keys()]).toEqual(['playlist-1']);
+    expect(songsOf(playlists)).toHaveLength(1);
+    expect(host.notifications.send).toHaveBeenCalledWith(
+      'p1',
+      expect.objectContaining({ title: 'Weekly Jams is ready' }),
+    );
+  });
 });

@@ -2,8 +2,8 @@ import type { SurfaceContext } from '@ValenceSDK/host/PluginDefinition';
 import type { SurfaceActRequest } from '@ValenceSDK/surface/SurfaceActRequestSchema';
 import type { Surface } from '@ValenceSDK/surface/SurfaceSchema';
 import { connectListenBrainz } from './connectListenBrainz';
+import { dropLink } from './dropLink';
 import { finishLastfmSignIn } from './finishLastfmSignIn';
-import { linkKeyFor } from './linkKeyFor';
 import { PLAYLIST_SOURCES } from './PLAYLIST_SOURCES';
 import { readLastfmKeys } from './readLastfmKeys';
 import { readLinks } from './readLinks';
@@ -103,7 +103,7 @@ const actOnListening = async (
         break;
       }
       case 'disconnect-listenbrainz': {
-        await valence.storage.delete(linkKeyFor('listenbrainz', profileId));
+        await dropLink(valence, profileId, 'listenbrainz');
 
         break;
       }
@@ -120,7 +120,7 @@ const actOnListening = async (
         break;
       }
       case 'disconnect-lastfm': {
-        await valence.storage.delete(linkKeyFor('lastfm', profileId));
+        await dropLink(valence, profileId, 'lastfm');
 
         break;
       }
