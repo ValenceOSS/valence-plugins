@@ -132,7 +132,13 @@ const aHost = (options: HostOptions = {}) => {
 
         return Promise.resolve();
       }),
-      keys: vi.fn((profileId: string) => Promise.resolve([...secretsOf(profileId).keys()])),
+      keys: vi.fn((profileId: string) => {
+        const refusal = keyRefusalOf(profileId);
+
+        return refusal === null
+          ? Promise.resolve([...secretsOf(profileId).keys()])
+          : Promise.reject(refusal);
+      }),
     },
     http: {
       fetch: vi.fn((url: string, init = {}) =>
