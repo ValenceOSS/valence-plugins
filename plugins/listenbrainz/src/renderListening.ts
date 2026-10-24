@@ -1,4 +1,5 @@
 import type { SurfaceContext } from '@ValenceSDK/host/PluginDefinition';
+import { shownAs } from '@Shared/shownAs';
 import type { SurfaceBlock } from '@ValenceSDK/surface/SurfaceBlockSchema';
 import type { Surface } from '@ValenceSDK/surface/SurfaceSchema';
 import { lastfmAllowUrlFor } from './lastfmAllowUrlFor';
@@ -25,7 +26,7 @@ const listenBrainzBlocks = (link: ListenBrainzLink | null): SurfaceBlock[] =>
         {
           type: 'row',
           label: 'ListenBrainz',
-          detail: `Connected as ${link.user}`,
+          detail: shownAs(`Connected as ${link.user}`, 120),
           icon: 'check',
           action: {
             id: 'disconnect-listenbrainz',
@@ -67,7 +68,7 @@ const lastfmBlocks = (
       {
         type: 'row',
         label: 'Last.fm',
-        detail: `Connected as ${link.user}`,
+        detail: shownAs(`Connected as ${link.user}`, 120),
         icon: 'check',
         action: {
           id: 'disconnect-lastfm',
@@ -143,7 +144,7 @@ const renderListening = async (
           label: source.name,
           detail: isUpdating
             ? 'Updating'
-            : kept === null
+            : kept === null || kept.version === ''
               ? 'Waiting for its first update'
               : `${kept.found.toString()} of ${kept.total.toString()} songs in your library`,
           icon: 'music',
@@ -180,7 +181,7 @@ const renderListening = async (
                   field: 'scrobble',
                   label: 'Scrobble songs I play',
                   value: preferences.scrobble,
-                  help: `Sends each song you finish to ${[
+                  help: `Sends each song you play half of, or four minutes of, to ${[
                     ...(links.listenbrainz === null ? [] : [SERVICE_NAMES.listenbrainz]),
                     ...(links.lastfm === null ? [] : [SERVICE_NAMES.lastfm]),
                   ].join(' and ')}.`,

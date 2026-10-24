@@ -5,6 +5,7 @@ import type { LastfmKeys } from './LastfmKeys';
 import { linkKeyFor } from './linkKeyFor';
 import { readLastfmAs } from './readLastfmAs';
 import { readLastfmSignIn } from './readLastfmSignIn';
+import { saveLink } from './saveLink';
 
 const SessionSchema = z.object({ session: z.object({ name: z.string(), key: z.string() }) });
 
@@ -41,10 +42,7 @@ const finishLastfmSignIn = async (
       SessionSchema,
     );
 
-    await valence.storage.set(linkKeyFor('lastfm', profileId), {
-      sessionKey: session.key,
-      user: session.name,
-    });
+    await saveLink(valence, profileId, 'lastfm', { user: session.name, secret: session.key });
     await valence.storage.delete(linkKeyFor('lastfm-sign-in', profileId));
 
     return null;

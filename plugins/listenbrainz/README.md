@@ -4,9 +4,12 @@ Scrobbles what you play in Valence, and keeps the services' playlists for you as
 Everyone on the server connects their own accounts, from **Account → ListenBrainz and Last.fm**, and
 everything it does is for them alone.
 
-- **Scrobbling:** each song you finish is sent to ListenBrainz, Last.fm or both, and each song you
-  start shows as playing now. Scrobbles a service does not take, while it is down, are kept and sent
-  in order within the hour. You can turn scrobbling off.
+- **Scrobbling:** each song you play for half its length, or four minutes, whichever comes first, is
+  sent to ListenBrainz, Last.fm or both, as the services ask, and each song you start shows as
+  playing now. Last.fm takes no song of 30 seconds or less. Scrobbles a service does not take, while
+  it is down or over its daily limit, are kept and sent in order within the hour, several at a time.
+  If the server's Last.fm key stops working they wait, and nobody is disconnected, until an
+  administrator puts it right. You can turn scrobbling off.
 - **Playlists:** choose which to keep, and each becomes a Valence playlist of its songs, kept up to
   date as the service changes it. A song your library does not have keeps its place, shown as
   missing with a way to request its album, and becomes the real song once your library has it:
@@ -41,12 +44,12 @@ settings. Each person then connects by allowing Valence on Last.fm's site and fi
 
 ## What it asks for
 
-| Permission                        | Why                                                                  |
-| --------------------------------- | -------------------------------------------------------------------- |
-| Network: ListenBrainz and Last.fm | To scrobble, and to read playlists and loved tracks                  |
-| Library: read                     | To find each song                                                    |
-| Viewing: read                     | To hear what you start and finish                                    |
-| Playlists: write                  | To make the playlists and keep them up to date                       |
-| Requests: create                  | To ask for albums you do not have, where an administrator chooses to |
-| Storage: 10 MB                    | To keep your connections, playlists and waiting scrobbles            |
-| Notifications                     | To tell you when a playlist is ready or a service disconnects        |
+| Permission                        | Why                                                                        |
+| --------------------------------- | -------------------------------------------------------------------------- |
+| Network: ListenBrainz and Last.fm | To scrobble, and to read playlists and loved tracks                        |
+| Library: read                     | To find each song                                                          |
+| Viewing: read                     | To hear what you start and stop                                            |
+| Playlists: write                  | To make the playlists and keep them up to date                             |
+| Requests: create                  | To ask for albums you do not have, where an administrator chooses to       |
+| Storage: 10 MB                    | To keep your playlists and waiting scrobbles; tokens are sealed per person |
+| Notifications                     | To tell you when a playlist is ready or a service disconnects              |

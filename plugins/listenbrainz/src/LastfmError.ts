@@ -1,5 +1,9 @@
 /** Codes Last.fm answers with that mean the session or sign-in is gone, so retrying cannot help. */
-const SIGNED_OUT = new Set([4, 9, 14, 15, 26]);
+const SIGNED_OUT = new Set([4, 9, 14, 15]);
+
+/** Codes Last.fm answers with when the server's API key or secret is wrong or suspended, which
+ * only an administrator can put right. */
+const MISCONFIGURED = new Set([10, 13, 26]);
 
 /** Codes Last.fm answers with when it is only busy, so the same call can be made again later. */
 const BUSY = new Set([8, 11, 16, 29]);
@@ -16,6 +20,11 @@ class LastfmError extends Error {
   /** Whether the person needs to connect Last.fm again. */
   get isSignedOut(): boolean {
     return SIGNED_OUT.has(this.code);
+  }
+
+  /** Whether the server's own Last.fm setup is broken. */
+  get isMisconfigured(): boolean {
+    return MISCONFIGURED.has(this.code);
   }
 
   /** Whether the call is worth making again later. */

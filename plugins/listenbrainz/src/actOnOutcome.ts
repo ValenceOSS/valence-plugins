@@ -28,6 +28,11 @@ const actOnOutcome = async (
     if ((await valence.storage.get(told)) !== null) {
       await valence.storage.delete(told);
     }
+  } else if (outcome.kind === 'misconfigured') {
+    valence.log.error('Scrobbles are waiting because the server is not set up for them', {
+      service,
+      reason: outcome.reason.slice(0, 400),
+    });
   } else if (outcome.kind === 'refused') {
     valence.log.warn('A scrobble was refused', { service, reason: outcome.reason.slice(0, 400) });
 

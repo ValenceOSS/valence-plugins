@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { ValenceHost } from '@ValenceSDK/host/ValenceHost';
+import { jsonOf } from '@Shared/jsonOf';
 import { askListenBrainz } from './askListenBrainz';
 import type { Listen } from './Listen';
 import type { ListenBrainzLink } from './Links';
@@ -10,20 +11,6 @@ const ErrorSchema = z.object({ error: z.string() });
 const ValidationSchema = z.object({ valid: z.boolean() });
 
 /**
- * Reads an answer as JSON, without trusting it to be any.
- *
- * @param text - The answer's body.
- * @returns It parsed, or nothing where it is not JSON.
- */
-const parsed = (text: string): unknown => {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
-};
-
-/**
  * Whether ListenBrainz still takes somebody's token, to tell a refused listen from a revoked token.
  *
  * @param valence - The host.
@@ -32,58 +19,61 @@ const parsed = (text: string): unknown => {
  */
 const isTokenValid = async (valence: ValenceHost, token: string): Promise<boolean> => {
   try {
-    const read = ValidationSchema.safeParse(
-      parsed((await askListenBrainz(valence, '/1/validate-token', { token })).text),
+    const read = jsonOf(
+      (await askListenBrainz(valence, '/1/validate-token', { token })).text,
+      ValidationSchema,
     );
 
-    return !read.success || read.data.valid;
+    return read === null || read.valid;
   } catch {
     return true;
   }
 };
 
 /**
- * Sends a listen to somebody's ListenBrainz, as finished or as playing now. A 401 is also how
- * ListenBrainz refuses an account it takes no listens from, such as one without a verified email
- * address, so the token is asked about before the person is taken to be signed out.
+ * Sends listens to somebody's ListenBrainz, as finished, several at once, or one as playing now.
+ * A 401 is also how ListenBrainz refuses an account it takes no listens from, such as one without a
+ * verified email address, so the token is asked about before the person is taken to be signed out.
  *
  * @param valence - The host.
  * @param link - Their ListenBrainz connection.
- * @param listen - The song.
- * @param isPlayingNow - Whether it has only started.
- * @returns How it went.
+ * @param listens - The songs, oldest first.
+ * @param isPlayingNow - Whether the one song has only started.
+ * @returns How it went, for all of them together.
  */
 const sendToListenBrainz = async (
   valence: ValenceHost,
   link: ListenBrainzLink,
-  listen: Listen,
+  listens: readonly Listen[],
   isPlayingNow: boolean,
 ): Promise<SendOutcome> => {
-  const metadata = {
-    artist_name: listen.artist,
-    track_name: listen.title,
-    ...(listen.album === null ? {} : { release_name: listen.album }),
-    additional_info: {
-      media_player: 'Valence',
-      submission_client: 'Valence',
-      submission_client_version: valence.plugin.version,
-      ...(listen.durationSeconds === null || listen.durationSeconds <= 0
-        ? {}
-        : { duration_ms: listen.durationSeconds * 1000 }),
-    },
-  };
+  const payload = listens.map((listen) => {
+    const metadata = {
+      artist_name: listen.artist,
+      track_name: listen.title,
+      ...(listen.album === null ? {} : { release_name: listen.album }),
+      additional_info: {
+        media_player: 'Valence',
+        submission_client: 'Valence',
+        submission_client_version: valence.plugin.version,
+        ...(listen.durationSeconds === null || listen.durationSeconds <= 0
+          ? {}
+          : { duration_ms: listen.durationSeconds * 1000 }),
+      },
+    };
+
+    return isPlayingNow
+      ? { track_metadata: metadata }
+      : { listened_at: listen.startedAt, track_metadata: metadata };
+  });
   let answer: { status: number; text: string };
 
   try {
     answer = await askListenBrainz(valence, '/1/submit-listens', {
       token: link.token,
       body: {
-        listen_type: isPlayingNow ? 'playing_now' : 'single',
-        payload: [
-          isPlayingNow
-            ? { track_metadata: metadata }
-            : { listened_at: listen.startedAt, track_metadata: metadata },
-        ],
+        listen_type: isPlayingNow ? 'playing_now' : payload.length === 1 ? 'single' : 'import',
+        payload,
       },
     });
   } catch {
@@ -98,10 +88,8 @@ const sendToListenBrainz = async (
     return { kind: 'busy' };
   }
 
-  const reason = ErrorSchema.safeParse(parsed(answer.text));
-  const said = reason.success
-    ? reason.data.error
-    : `ListenBrainz answered ${answer.status.toString()}`;
+  const said =
+    jsonOf(answer.text, ErrorSchema)?.error ?? `ListenBrainz answered ${answer.status.toString()}`;
 
   if (answer.status === 401) {
     return (await isTokenValid(valence, link.token))

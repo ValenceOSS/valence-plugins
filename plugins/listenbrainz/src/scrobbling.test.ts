@@ -1,5 +1,7 @@
 import { aHost } from '@Shared/testing/aHost';
+import { actOnListening } from './actOnListening';
 import { scrobble } from './scrobble';
+import { contextFor } from './testing/contextFor';
 import { updateEveryone } from './updateEveryone';
 import { bothServices } from './testing/bothServices';
 import { LASTFM_KEYS } from './testing/LASTFM_KEYS';
@@ -8,7 +10,7 @@ import { listenBrainzAnswers, TOKEN } from './testing/listenBrainzAnswers';
 import { musicLibrary } from './testing/musicLibrary';
 
 const finished = {
-  topic: 'playback.finished',
+  topic: 'playback.stopped',
   occurredAt: '2026-10-05T12:03:35.000Z',
   profileId: 'p1',
   mediaId: 's1',
@@ -21,11 +23,21 @@ const STARTED_AT = Date.parse('2026-10-05T12:00:00.000Z') / 1000;
 const connectedHost = (answers = bothServices()) => {
   const made = aHost({ settings: LASTFM_KEYS, answers, library: musicLibrary() });
 
-  made.stored.set('listenbrainz:p1', { token: TOKEN, user: 'marques' });
-  made.stored.set('lastfm:p1', { sessionKey: 'session-key', user: 'marques' });
+  made.stored.set('listenbrainz:p1', { user: 'marques' });
+  made.stored.set('lastfm:p1', { user: 'marques' });
+  made.secrets.set(
+    'p1',
+    new Map([
+      ['listenbrainz-token', TOKEN],
+      ['lastfm-session', 'session-key'],
+    ]),
+  );
 
   return made;
 };
+
+const waiting = (stored: Map<string, unknown>) =>
+  [...stored.keys()].filter((key) => key.startsWith('pending:')).sort();
 
 const sent = (host: ReturnType<typeof aHost>['host']) =>
   host.http.fetch.mock.calls.map(([url, init]) =>
@@ -35,7 +47,7 @@ const sent = (host: ReturnType<typeof aHost>['host']) =>
   );
 
 describe('scrobbling', () => {
-  it('scrobbles a finished song to both services, from when it started', async () => {
+  it('scrobbles a song played far enough to both services, from when it started', async () => {
     const { host, stored } = connectedHost();
 
     expect(await scrobble(host, finished)).toEqual(['listenbrainz', 'lastfm']);
@@ -66,18 +78,26 @@ describe('scrobbling', () => {
         to: 'lastfm',
         body: expect.objectContaining({
           method: 'track.scrobble',
-          artist: 'The Signal Box',
-          track: 'Northern Line',
-          album: 'Platforms',
-          duration: '215',
-          timestamp: STARTED_AT.toString(),
+          'artist[0]': 'The Signal Box',
+          'track[0]': 'Northern Line',
+          'album[0]': 'Platforms',
+          'duration[0]': '215',
+          'timestamp[0]': STARTED_AT.toString(),
           sk: 'session-key',
           api_key: 'api-key',
           format: 'json',
         }),
       },
     ]);
-    expect(stored.has('pending:p1')).toBe(false);
+    expect(waiting(stored)).toEqual([]);
+  });
+
+  it('scrobbles nothing stopped before half way, and nothing on the finished event', async () => {
+    const { host } = connectedHost();
+
+    expect(await scrobble(host, { ...finished, positionSeconds: 100 })).toEqual([]);
+    expect(await scrobble(host, { ...finished, topic: 'playback.finished' })).toEqual([]);
+    expect(host.http.fetch).not.toHaveBeenCalled();
   });
 
   it('says what is playing now when a song starts, without keeping it to resend', async () => {
@@ -100,7 +120,7 @@ describe('scrobbling', () => {
         body: expect.objectContaining({ method: 'track.updateNowPlaying' }),
       }),
     ]);
-    expect(stored.has('pending:p1')).toBe(false);
+    expect(waiting(stored)).toEqual([]);
   });
 
   it('ignores films, unknown songs, other events, and people who turned it off', async () => {
@@ -108,7 +128,7 @@ describe('scrobbling', () => {
 
     expect(await scrobble(host, { ...finished, mediaId: 'film' })).toEqual([]);
     expect(await scrobble(host, { ...finished, mediaId: 'gone' })).toEqual([]);
-    expect(await scrobble(host, { ...finished, topic: 'playback.stopped' })).toEqual([]);
+    expect(await scrobble(host, { ...finished, topic: 'playback.paused' })).toEqual([]);
     expect(await scrobble(host, { ...finished, profileId: 'p2' })).toEqual([]);
 
     stored.set('preferences:p1', { scrobble: false, keep: [] });
@@ -140,29 +160,29 @@ describe('scrobbling', () => {
     );
 
     await scrobble(host, finished);
-    await scrobble(host, { ...finished, mediaId: 's2' });
+    await scrobble(host, { ...finished, mediaId: 's2', occurredAt: '2026-10-05T12:09:00.000Z' });
 
-    expect(stored.get('pending:p1')).toEqual([
-      { service: 'listenbrainz', listen: expect.objectContaining({ title: 'Northern Line' }) },
-      { service: 'listenbrainz', listen: expect.objectContaining({ title: 'Low Tide' }) },
-    ]);
+    expect(waiting(stored)).toHaveLength(2);
 
     isDown = false;
     host.http.fetch.mockClear();
     await updateEveryone(host, new Date(finished.occurredAt));
 
-    expect(
-      sent(host).map(
-        (each) =>
-          (each.body as { payload: { track_metadata: { track_name: string } }[] }).payload[0]
-            ?.track_metadata.track_name,
-      ),
-    ).toEqual(['Northern Line', 'Low Tide']);
-    expect(stored.get('pending:p1')).toEqual([]);
+    const resent = sent(host).filter((each) => each.to === 'listenbrainz');
+
+    expect(resent).toHaveLength(1);
+    expect(resent[0]?.body).toMatchObject({
+      listen_type: 'import',
+      payload: [
+        { track_metadata: expect.objectContaining({ track_name: 'Northern Line' }) },
+        { track_metadata: expect.objectContaining({ track_name: 'Low Tide' }) },
+      ],
+    });
+    expect(waiting(stored)).toEqual([]);
   });
 
   it('disconnects a service that refuses the sign-in, and says so', async () => {
-    const { host, stored } = connectedHost(
+    const { host, stored, secrets } = connectedHost(
       bothServices(
         listenBrainzAnswers([], 401, { isTokenValid: false }),
         lastfmAnswers({ scrobbleError: 9 }),
@@ -173,7 +193,8 @@ describe('scrobbling', () => {
 
     expect(stored.has('listenbrainz:p1')).toBe(false);
     expect(stored.has('lastfm:p1')).toBe(false);
-    expect(stored.has('pending:p1')).toBe(false);
+    expect([...(secrets.get('p1')?.keys() ?? [])]).toEqual([]);
+    expect(waiting(stored)).toEqual([]);
     expect(host.notifications.send).toHaveBeenCalledWith(
       'p1',
       expect.objectContaining({ title: 'Last.fm disconnected' }),
@@ -194,8 +215,8 @@ describe('scrobbling', () => {
     await scrobble(host, finished);
     await scrobble(host, { ...finished, mediaId: 's2' });
 
-    expect(stored.get('listenbrainz:p1')).toEqual({ token: TOKEN, user: 'marques' });
-    expect(stored.has('pending:p1')).toBe(false);
+    expect(stored.get('listenbrainz:p1')).toEqual({ user: 'marques' });
+    expect(waiting(stored)).toEqual([]);
     expect(host.log.warn).toHaveBeenCalledWith('A scrobble was refused', {
       service: 'listenbrainz',
       reason: email,
@@ -209,5 +230,140 @@ describe('scrobbling', () => {
     await scrobble(host, finished);
 
     expect(stored.has('told:p1:listenbrainz')).toBe(false);
+  });
+
+  it('keeps a scrobble Last.fm held back for its daily limit, and lets go of one it ignored for good', async () => {
+    const { host, stored } = connectedHost(
+      bothServices(listenBrainzAnswers(), lastfmAnswers({ ignored: { 0: 5, 1: 3 } })),
+    );
+
+    stored.set('preferences:p1', { scrobble: true, keep: [] });
+    await scrobble(host, finished);
+    await scrobble(host, { ...finished, mediaId: 's2', occurredAt: '2026-10-05T12:09:00.000Z' });
+
+    expect(waiting(stored).filter((key) => key.includes(':lastfm:'))).toHaveLength(1);
+  });
+
+  it('holds scrobbles while the server’s Last.fm key is refused, without disconnecting anyone', async () => {
+    const { host, stored } = connectedHost(
+      bothServices(listenBrainzAnswers(), lastfmAnswers({ scrobbleError: 26 })),
+    );
+
+    await scrobble(host, finished);
+
+    expect(stored.get('lastfm:p1')).toEqual({ user: 'marques' });
+    expect(waiting(stored).filter((key) => key.includes(':lastfm:'))).toHaveLength(1);
+    expect(host.notifications.send).not.toHaveBeenCalled();
+    expect(host.log.error).toHaveBeenCalledWith(
+      'Scrobbles are waiting because the server is not set up for them',
+      expect.objectContaining({ service: 'lastfm' }),
+    );
+  });
+
+  it('moves what an earlier version kept: tokens into sealed secrets, and waiting scrobbles one to a key', async () => {
+    const { host, stored, secrets } = connectedHost(
+      bothServices(listenBrainzAnswers([], 503), lastfmAnswers({ scrobbleError: 11 })),
+    );
+
+    secrets.clear();
+    stored.set('listenbrainz:p1', { token: TOKEN, user: 'marques' });
+    stored.set('pending:p1', [
+      {
+        service: 'listenbrainz',
+        listen: { title: 'Old', artist: 'A', album: null, durationSeconds: 200, startedAt: 100 },
+      },
+    ]);
+
+    await updateEveryone(host, new Date(finished.occurredAt));
+
+    expect(stored.get('listenbrainz:p1')).toEqual({ user: 'marques' });
+    expect(secrets.get('p1')?.get('listenbrainz-token')).toBe(TOKEN);
+    expect(stored.has('pending:p1')).toBe(false);
+    expect(waiting(stored)).toEqual([
+      expect.stringMatching(/^pending:p1:listenbrainz:000000000100:[0-9a-f]{8}$/u),
+    ]);
+  });
+
+  it('sends one at a time, in turn, when ListenBrainz refuses a batch', async () => {
+    let isBatchRefused = true;
+    const { host, stored } = connectedHost(
+      bothServices(
+        (url, init) =>
+          isBatchRefused && (init.body ?? '').includes('"import"')
+            ? { status: 400, text: JSON.stringify({ error: 'Bad listen' }) }
+            : listenBrainzAnswers([], isBatchRefused ? 503 : 200)(url, init),
+        lastfmAnswers(),
+      ),
+    );
+
+    await scrobble(host, finished);
+    await scrobble(host, { ...finished, mediaId: 's2', occurredAt: '2026-10-05T12:09:00.000Z' });
+    isBatchRefused = true;
+    host.http.fetch.mockClear();
+    await updateEveryone(host, new Date(finished.occurredAt));
+
+    const listenTypes = sent(host)
+      .filter((each) => each.to === 'listenbrainz')
+      .map((each) => JSON.stringify(each.body).match(/"listen_type":"(\w+)"/u)?.[1]);
+
+    expect(listenTypes).toEqual(['import', 'single']);
+    expect(waiting(stored).filter((key) => key.includes(':listenbrainz:'))).toHaveLength(2);
+  });
+
+  it('keeps two songs started in the same second apart', async () => {
+    const { host, stored } = connectedHost(
+      bothServices(listenBrainzAnswers([], 503), lastfmAnswers({ scrobbleError: 11 })),
+    );
+
+    await scrobble(host, finished);
+    await scrobble(host, { ...finished, mediaId: 's2', positionSeconds: 215 });
+
+    expect(waiting(stored).filter((key) => key.includes(':listenbrainz:'))).toHaveLength(2);
+  });
+
+  it('takes a length of zero from the player as unknown, rather than scrobbling at once', async () => {
+    const { host } = connectedHost();
+
+    expect(await scrobble(host, { ...finished, positionSeconds: 3, durationSeconds: 0 })).toEqual(
+      [],
+    );
+  });
+
+  it('drops a service’s waiting scrobbles when it is disconnected, so they never reach another account', async () => {
+    const { host, stored } = connectedHost(
+      bothServices(listenBrainzAnswers([], 503), lastfmAnswers()),
+    );
+
+    await scrobble(host, finished);
+    await actOnListening(contextFor(host), {
+      action: { id: 'disconnect-listenbrainz' },
+      fields: {},
+    });
+
+    expect(waiting(stored)).toEqual([]);
+  });
+
+  it('reads Last.fm’s answer for a single scrobble, which comes as one object', async () => {
+    const { host, stored } = connectedHost(
+      bothServices(listenBrainzAnswers(), (url, init) => {
+        const params = new URLSearchParams(init.body ?? '');
+
+        return params.get('method') === 'track.scrobble'
+          ? {
+              status: 200,
+              text: JSON.stringify({
+                scrobbles: {
+                  scrobble: { ignoredMessage: { code: '5', '#text': 'Daily limit' } },
+                  '@attr': { accepted: 0, ignored: 1 },
+                },
+              }),
+            }
+          : lastfmAnswers()(url, init);
+      }),
+    );
+
+    await scrobble(host, finished);
+
+    expect(waiting(stored).filter((key) => key.includes(':lastfm:'))).toHaveLength(1);
   });
 });

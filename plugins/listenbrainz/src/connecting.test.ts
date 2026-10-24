@@ -29,10 +29,11 @@ const press = async (
 
 describe('connecting ListenBrainz', () => {
   it('keeps a token ListenBrainz accepts, as the account it belongs to', async () => {
-    const { host, stored } = aHost({ answers: bothServices() });
+    const { host, stored, secrets } = aHost({ answers: bothServices() });
     const blocks = await press(host, 'connect-listenbrainz', { listenbrainzToken: ` ${TOKEN} ` });
 
-    expect(stored.get('listenbrainz:p1')).toEqual({ token: TOKEN, user: 'marques' });
+    expect(stored.get('listenbrainz:p1')).toEqual({ user: 'marques' });
+    expect(secrets.get('p1')?.get('listenbrainz-token')).toBe(TOKEN);
     expect(blocks).toContainEqual(
       expect.objectContaining({ type: 'row', detail: 'Connected as marques' }),
     );
@@ -89,7 +90,7 @@ describe('connecting Last.fm', () => {
 
   it('sends the person to Last.fm to allow it, then finishes once they have', async () => {
     let isAllowed = false;
-    const { host, stored } = aHost({
+    const { host, stored, secrets } = aHost({
       settings: LASTFM_KEYS,
       answers: bothServices(listenBrainzAnswers(), lastfmAnswers({ isAllowed: () => isAllowed })),
     });
@@ -113,7 +114,8 @@ describe('connecting Last.fm', () => {
     expect(await press(host, 'finish-lastfm')).toContainEqual(
       expect.objectContaining({ type: 'row', label: 'Last.fm', detail: 'Connected as marques' }),
     );
-    expect(stored.get('lastfm:p1')).toEqual({ sessionKey: 'session-key', user: 'marques' });
+    expect(stored.get('lastfm:p1')).toEqual({ user: 'marques' });
+    expect(secrets.get('p1')?.get('lastfm-session')).toBe('session-key');
     expect(stored.has('lastfm-sign-in:p1')).toBe(false);
 
     const body = new URLSearchParams(host.http.fetch.mock.calls.at(-1)?.[1]?.body ?? '');

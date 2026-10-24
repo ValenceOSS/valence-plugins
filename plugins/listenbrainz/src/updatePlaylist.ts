@@ -1,4 +1,6 @@
 import type { ValenceHost } from '@ValenceSDK/host/ValenceHost';
+import { pendingRequestKeyFor } from '@Shared/pendingRequestKeyFor';
+import { shownAs } from '@Shared/shownAs';
 import { fillPlaylist } from './fillPlaylist';
 import { findSongFor } from './findSongFor';
 import type { KeptPlaylist } from './KeptPlaylist';
@@ -12,7 +14,9 @@ import type { Preferences } from './Preferences';
 import { readKeptPlaylist } from './readKeptPlaylist';
 import type { MadeFor } from './readListenBrainzPlaylist';
 import { readSourcePlaylist } from './readSourcePlaylist';
-import { PENDING_REQUESTS } from './PENDING_REQUESTS';
+
+/** The longest a playlist's name may be. */
+const MOST_NAME_CHARACTERS = 100;
 
 /** How often a service is asked whether a playlist has changed. */
 const CHECK_EVERY_HOURS = 6;
@@ -27,15 +31,16 @@ type UpdateOutcome = 'idle' | 'working' | 'updated' | 'deleted';
  * library a few at a time until the deadline. A song the library does not have keeps its place as a
  * missing song, named by the first artist it credits, since that is how a library credits it, so
  * Valence can fill it in once it arrives. Where the administrator chose to request missing albums,
- * the playlist is noted for them to be requested once it changes.
- * Once every song is matched, the Valence playlist is made or brought up to date in one go, so it
- * is never left half changed, and none is made while the service's has no songs at all. Deleting
- * the Valence playlist stops it being kept.
+ * the playlist is noted for them to be requested once it changes. Once every song is matched, the
+ * Valence playlist is made, and kept at once, so a failure after never makes a second and the next
+ * run tries again straight away, or brought up to date in one go, so it is never left half changed;
+ * none is made while the service's has no songs at all. Deleting the Valence playlist stops it
+ * being kept.
  *
  * @param valence - The host.
- * @param context - Whose playlist and their name, which a new playlist is named after so a household
- *   can tell everyone's apart, their connections, choices and the plugin's Last.fm keys, whether
- *   missing albums are to be requested, and what this run has already read.
+ * @param context - Whose playlist and their name, which a new playlist is named after so a
+ *   household can tell everyone's apart, their connections, choices and the plugin's Last.fm keys,
+ *   whether missing albums are to be requested, and what this run has already read.
  * @param source - Which service playlist.
  * @param now - The time now.
  * @param deadline - When to stop matching songs, as `Date.now()` time.
@@ -144,14 +149,32 @@ const updatePlaylist = async (
     return 'deleted';
   }
 
-  const playlistId =
-    kept?.playlistId ??
-    (
+  const name = shownAs(
+    context.personName === '' ? source.name : source.namedFor(context.personName),
+    MOST_NAME_CHARACTERS,
+  );
+  let playlistId = kept?.playlistId;
+
+  if (playlistId === undefined) {
+    playlistId = (
       await valence.playlists.create(profileId, {
-        name: context.personName === '' ? source.name : source.namedFor(context.personName),
+        name,
         description: `Kept up to date from ${source.service === 'listenbrainz' ? 'ListenBrainz' : 'Last.fm'}.`,
       })
     ).id;
+
+    const placeholder: KeptPlaylist = {
+      playlistId,
+      version: '',
+      entryIds: [],
+      found: 0,
+      total: 0,
+      checkedAt: new Date(0).toISOString(),
+      updatedAt: now.toISOString(),
+    };
+
+    await valence.storage.set(keys.kept, placeholder);
+  }
   const next: KeptPlaylist = {
     playlistId,
     version: update.version,
@@ -172,13 +195,10 @@ const updatePlaylist = async (
   await valence.storage.delete(keys.update);
 
   if (context.shouldRequest && next.found < next.total) {
-    await valence.storage.set(`${PENDING_REQUESTS}${profileId}:${source.id}`, {
-      playlistId,
-      name: context.personName === '' ? source.name : source.namedFor(context.personName),
-    });
+    await valence.storage.set(pendingRequestKeyFor(profileId, source.id), { playlistId, name });
   }
 
-  if (kept === null) {
+  if (kept === null || kept.version === '') {
     await valence.notifications.send(profileId, {
       title: `${source.name} is ready`,
       body: `${next.found.toString()} of ${next.total.toString()} songs are in your library.`,

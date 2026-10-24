@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { ValenceHost } from '@ValenceSDK/host/ValenceHost';
 import { readJsonAs } from '@Shared/readJsonAs';
 import { askListenBrainz } from './askListenBrainz';
-import { linkKeyFor } from './linkKeyFor';
+import { saveLink } from './saveLink';
 
 const ValidationSchema = z.object({ valid: z.boolean(), user_name: z.string().optional() });
 
@@ -36,10 +36,7 @@ const connectListenBrainz = async (
     return 'ListenBrainz did not accept that token. Copy it again from your ListenBrainz settings page.';
   }
 
-  await valence.storage.set(linkKeyFor('listenbrainz', profileId), {
-    token: pasted,
-    user: answer.user_name,
-  });
+  await saveLink(valence, profileId, 'listenbrainz', { user: answer.user_name, secret: pasted });
 
   return null;
 };
