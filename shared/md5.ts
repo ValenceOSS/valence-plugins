@@ -36,11 +36,11 @@ const md5 = (text: string): string => {
   view.setUint32(padded.length - 8, (message.length * 8) >>> 0, true);
   view.setUint32(padded.length - 4, Math.floor(message.length / 0x20000000), true);
 
-  const state = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476];
+  const state: [number, number, number, number] = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476];
 
   for (let block = 0; block < padded.length; block += 64) {
     const words = Array.from({ length: 16 }, (_, at) => view.getUint32(block + at * 4, true));
-    let [a, b, c, d] = state as [number, number, number, number];
+    let [a, b, c, d] = state;
 
     for (let at = 0; at < 64; at += 1) {
       const [mixed, word] =
