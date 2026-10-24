@@ -5,6 +5,7 @@ type SourcePlaylist = {
   id: string;
   name: string;
   tracks: ImportedTrack[];
+  isCut: boolean;
 };
 
 export type { SourcePlaylist };

@@ -3,10 +3,11 @@ import type { PlaylistLink } from './readPlaylistLink';
 import { readApplePlaylist } from './readApplePlaylist';
 import { readSpotifyPlaylist } from './readSpotifyPlaylist';
 import type { SourcePlaylist } from './SourcePlaylist';
-import { spotifyToken } from './spotifyToken';
 
 /**
  * Reads the playlist a link or a connected account points at, from whichever service it is on.
+ * Spotify is read with the person's own account, since Spotify shares songs only from playlists
+ * they made or collaborate on.
  *
  * @param valence - The host.
  * @param profileId - Who is importing.
@@ -19,11 +20,11 @@ const readSourcePlaylist = async (
   link: PlaylistLink,
 ): Promise<SourcePlaylist | string> => {
   if (link.source === 'spotify') {
-    const token = await spotifyToken(valence, profileId);
+    const connection = await valence.accounts.connection(profileId, 'spotify');
 
-    return token === null
-      ? 'Connect Spotify first, or ask an administrator to add Spotify’s client id and secret.'
-      : readSpotifyPlaylist(valence, token, link.id);
+    return connection === null
+      ? 'Connect Spotify first. It shares the songs of playlists you made or collaborate on.'
+      : readSpotifyPlaylist(valence, connection.accessToken, link.id);
   }
 
   const developerToken = (await valence.settings.read())['appleMusicToken'];

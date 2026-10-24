@@ -86,7 +86,13 @@ const readApplePlaylist = async (
           );
   }
 
-  return { source: 'apple', id, name: playlist?.attributes.name ?? 'Apple Music playlist', tracks };
+  return {
+    source: 'apple',
+    id,
+    name: playlist?.attributes.name ?? 'Apple Music playlist',
+    tracks,
+    isCut: page !== null,
+  };
 };
 
 export { readApplePlaylist };

@@ -2,7 +2,11 @@ import type { SurfaceContext } from '@ValenceSDK/host/PluginDefinition';
 import type { SurfaceActRequest } from '@ValenceSDK/surface/SurfaceActRequestSchema';
 import type { Surface } from '@ValenceSDK/surface/SurfaceSchema';
 import { continueMusicImport } from './continueMusicImport';
+import { finishMusicImport } from './finishMusicImport';
+import { IMPORTING } from './IMPORTING';
+import { STOP_ASKED } from './STOP_ASKED';
 import type { PlaylistLink } from './readPlaylistLink';
+import { readMusicImportJob } from './readMusicImportJob';
 import { readPlaylistLink } from './readPlaylistLink';
 import { readSourcePlaylist } from './readSourcePlaylist';
 import { renderImport } from './renderImport';
@@ -10,7 +14,7 @@ import { startMusicImport } from './startMusicImport';
 
 /**
  * Does what somebody pressed on the import page, then shows it again, with a sentence where it
- * could not be done.
+ * could not be done. A new import waits for the one under way to finish.
  *
  * @param context - The host and who pressed it.
  * @param request - What they pressed, and the page's fields.
@@ -25,7 +29,31 @@ const actOnImport = async (
   const { valence, viewer } = context;
 
   if (request.action.id === 'continue') {
-    await continueMusicImport(valence, viewer.profileId, now);
+    try {
+      await continueMusicImport(valence, viewer.profileId, now);
+    } catch (failure) {
+      valence.log.warn('Could not carry on a playlist import', {
+        problem: failure instanceof Error ? failure.message : 'unknown',
+      });
+
+      return renderImport(context, 'The import could not carry on just now. It will try again.');
+    }
+
+    return renderImport(context);
+  }
+
+  if (request.action.id === 'stop') {
+    if (IMPORTING.has(viewer.profileId)) {
+      STOP_ASKED.add(viewer.profileId);
+
+      return renderImport(context, 'Stopping once the songs being added now are in.');
+    }
+
+    const stopping = await readMusicImportJob(valence, viewer.profileId);
+
+    if (stopping !== null && stopping.finishedAt === null) {
+      await finishMusicImport(valence, viewer.profileId, stopping, now, 'stopped');
+    }
 
     return renderImport(context);
   }
@@ -47,6 +75,20 @@ const actOnImport = async (
     );
   }
 
+  const starting = `start:${viewer.profileId}`;
+  const running = await readMusicImportJob(valence, viewer.profileId);
+
+  if (IMPORTING.has(starting) || (running !== null && running.finishedAt === null)) {
+    return renderImport(
+      context,
+      running === null || running.finishedAt !== null
+        ? 'A playlist is already being read. Start another once it has finished.'
+        : `${running.name} is still importing. Start another once it has finished.`,
+    );
+  }
+
+  IMPORTING.add(starting);
+
   try {
     const playlist = await readSourcePlaylist(valence, viewer.profileId, link);
 
@@ -61,9 +103,6 @@ const actOnImport = async (
       request.fields['shouldRequest'] !== false,
       now,
     );
-    await continueMusicImport(valence, viewer.profileId, now);
-
-    return renderImport(context);
   } catch (failure) {
     valence.log.warn('A playlist could not be read', {
       problem: failure instanceof Error ? failure.message : 'unknown',
@@ -73,7 +112,19 @@ const actOnImport = async (
       context,
       'The playlist could not be read. It may be private, or the service may be busy.',
     );
+  } finally {
+    IMPORTING.delete(starting);
   }
+
+  try {
+    await continueMusicImport(valence, viewer.profileId, now);
+  } catch (failure) {
+    valence.log.warn('Could not carry on a playlist import', {
+      problem: failure instanceof Error ? failure.message : 'unknown',
+    });
+  }
+
+  return renderImport(context);
 };
 
 export { actOnImport };

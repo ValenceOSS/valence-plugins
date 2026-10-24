@@ -1,15 +1,21 @@
 import type { MissingSong, ValenceHost } from '@ValenceSDK/host/ValenceHost';
+import { finishMusicImport } from './finishMusicImport';
+import { IMPORTING } from './IMPORTING';
 import { jobKeyFor } from './jobKeyFor';
 import type { MusicImportJob } from './MusicImportJob';
 import { readMusicImportJob } from './readMusicImportJob';
+import { STOP_ASKED } from './STOP_ASKED';
+import { songOf } from './songOf';
 
 const SONGS_AT_A_TIME = 25;
 
 /**
  * Carries a playlist import on by a few songs: adds each song to the playlist in order, one the
- * library does not have as a missing song in its place, which Valence fills in once it arrives, and,
- * where asked, requests the album of each song it does not have, once per album. Finishes by
- * itself, and tells the importer how it went.
+ * library does not have as a missing song in its place, which Valence fills in once it arrives.
+ * How far it got is saved before the songs are added, so a failure afterwards never adds them
+ * twice; a failed add is put back and tried again next time, unless the playlist itself is gone,
+ * which stops the import. Only one carries a given import on at a time, and a stop asked for
+ * while it runs takes effect once its songs are in.
  *
  * @param valence - The host.
  * @param profileId - Whose import.
@@ -21,75 +27,81 @@ const continueMusicImport = async (
   profileId: string,
   now: Date,
 ): Promise<MusicImportJob | null> => {
-  const job = await readMusicImportJob(valence, profileId);
-
-  if (job === null || job.finishedAt !== null) {
-    return job;
+  if (IMPORTING.has(profileId)) {
+    return readMusicImportJob(valence, profileId);
   }
 
-  const adding: (string | MissingSong)[] = [];
+  IMPORTING.add(profileId);
 
-  for (const track of job.tracks.slice(job.next, job.next + SONGS_AT_A_TIME)) {
-    const found = await valence.music.findTrack({
-      title: track.title,
-      artist: track.artist,
-      ...(track.album === null ? {} : { album: track.album }),
-      ...(track.isrc === null ? {} : { isrc: track.isrc }),
-    });
+  try {
+    const job = await readMusicImportJob(valence, profileId);
 
-    if (found !== null) {
-      adding.push(found.id);
-
-      continue;
+    if (job === null || job.finishedAt !== null) {
+      return job;
     }
 
-    job.missing.push(`${track.title}, ${track.artist}`);
-    adding.push({ title: track.title, artist: track.artist, album: track.album });
+    const adding: (string | MissingSong)[] = [];
+    const missing: string[] = [];
 
-    if (!job.shouldRequest) {
-      continue;
-    }
+    for (const track of job.tracks.slice(job.next, job.next + SONGS_AT_A_TIME)) {
+      const song = songOf(track);
 
-    const hits = await valence.requests.searchCatalogue(
-      `${track.artist} ${track.album ?? track.title}`,
-      'album',
-    );
-    const hit = hits.find((each) => !each.isInLibrary);
+      if (song === null) {
+        continue;
+      }
 
-    if (hit !== undefined && !hit.isRequested && !job.requested.includes(hit.catalogueId)) {
-      const made = await valence.requests.create(profileId, {
-        catalogueId: hit.catalogueId,
-        kind: 'album',
+      const found = await valence.music.findTrack({
+        title: song.title,
+        artist: song.artist,
+        ...(song.album === null || song.album === undefined ? {} : { album: song.album }),
+        ...(song.isrc === null ? {} : { isrc: song.isrc }),
       });
 
-      if (made.status === 'made') {
-        job.requested.push(hit.catalogueId);
+      if (found === null) {
+        missing.push(`${song.title}, ${song.artist}`);
+        adding.push({ title: song.title, artist: song.artist, album: song.album ?? null });
+      } else {
+        adding.push(found.id);
+      }
+    }
+
+    const moved: MusicImportJob = {
+      ...job,
+      next: Math.min(job.tracks.length, job.next + SONGS_AT_A_TIME),
+      found: job.found + adding.filter((item) => typeof item === 'string').length,
+      missing: [...job.missing, ...missing],
+    };
+
+    await valence.storage.set(jobKeyFor(profileId), moved);
+
+    if (adding.length > 0) {
+      try {
+        await valence.playlists.add(profileId, job.playlistId, adding);
+      } catch (failure) {
+        if ((await valence.playlists.read(profileId, job.playlistId).catch(() => job)) === null) {
+          return await finishMusicImport(valence, profileId, job, now, 'playlistGone');
+        }
+
+        await valence.storage.set(jobKeyFor(profileId), job).catch(() => undefined);
+
+        throw failure;
+      }
+    }
+
+    return moved.next >= moved.tracks.length
+      ? await finishMusicImport(valence, profileId, moved, now, 'done')
+      : moved;
+  } finally {
+    IMPORTING.delete(profileId);
+
+    if (STOP_ASKED.delete(profileId)) {
+      const stopping = await readMusicImportJob(valence, profileId);
+
+      if (stopping !== null && stopping.finishedAt === null) {
+        await finishMusicImport(valence, profileId, stopping, now, 'stopped');
       }
     }
   }
-
-  if (adding.length > 0) {
-    await valence.playlists.add(profileId, job.playlistId, adding);
-    job.found += adding.filter((item) => typeof item === 'string').length;
-  }
-
-  job.next = Math.min(job.tracks.length, job.next + SONGS_AT_A_TIME);
-
-  if (job.next >= job.tracks.length) {
-    job.finishedAt = now.toISOString();
-    await valence.notifications.send(profileId, {
-      title: `${job.name} imported`,
-      body: `${job.found.toString()} of ${job.tracks.length.toString()} songs are in your library${
-        job.requested.length === 0
-          ? '.'
-          : `, and ${job.requested.length.toString()} albums were requested.`
-      }`,
-    });
-  }
-
-  await valence.storage.set(jobKeyFor(profileId), job);
-
-  return job;
 };
 
 export { continueMusicImport };
