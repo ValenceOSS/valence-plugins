@@ -18,9 +18,11 @@ type HostOptions = {
 };
 
 /**
- * A `valence` host held in memory, for testing a plugin without a server: storage is a map, the
- * web answers as the test says, what is marked watched and playlists are kept as they are changed,
- * songs are found as Valence finds them, and every other call is recorded.
+ * A `valence` host held in memory, for testing a plugin without a server: storage and per-person
+ * secrets are maps, read back through the same JSON round trip the real host gives them, secrets
+ * and keys are held to the real host's limits, the web answers as the test says, what is marked watched and
+ * playlists are kept as they are changed, songs are found as Valence finds them, and every other
+ * call is recorded.
  *
  * @param options - The settings, web answers, connected accounts, library and playlists this test
  *   starts with.
@@ -28,6 +30,18 @@ type HostOptions = {
  */
 const aHost = (options: HostOptions = {}) => {
   const stored = new Map<string, Stored>();
+  const secrets = new Map<string, Map<string, string>>();
+  const secretsOf = (profileId: string): Map<string, string> =>
+    secrets.get(profileId) ?? new Map<string, string>();
+  const keyRefusalOf = (key: string): Error | null =>
+    key.length < 1 || key.length > 200 ? new Error('The host refused these arguments.') : null;
+  const refusalOf = (profileId: string, key: string, value = 'kept'): Error | null =>
+    keyRefusalOf(profileId) ??
+    keyRefusalOf(key) ??
+    (value.length < 1 || value.length > 4096
+      ? new Error('The host refused these arguments.')
+      : null);
+  const copyOf = (value: Stored): Stored => JSON.parse(JSON.stringify(value));
   const library = options.library ?? [];
   const finished = new Set(options.finished ?? []);
   const playlists = new Map(
@@ -45,20 +59,86 @@ const aHost = (options: HostOptions = {}) => {
     settings: { read: vi.fn(() => Promise.resolve(options.settings ?? {})) },
     log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     storage: {
-      get: vi.fn((key: string) => Promise.resolve(stored.get(key) ?? null)),
+      get: vi.fn((key: string) => {
+        const refusal = keyRefusalOf(key);
+        const kept = stored.get(key);
+
+        if (refusal !== null) {
+          return Promise.reject(refusal);
+        }
+
+        return Promise.resolve(kept === undefined ? null : copyOf(kept));
+      }),
       set: vi.fn((key: string, value: Stored) => {
-        stored.set(key, value);
+        const refusal = keyRefusalOf(key);
+
+        if (refusal !== null) {
+          return Promise.reject(refusal);
+        }
+
+        stored.set(key, copyOf(value));
 
         return Promise.resolve();
       }),
       delete: vi.fn((key: string) => {
+        const refusal = keyRefusalOf(key);
+
+        if (refusal !== null) {
+          return Promise.reject(refusal);
+        }
+
         stored.delete(key);
 
         return Promise.resolve();
       }),
       keys: vi.fn((prefix = '') =>
-        Promise.resolve([...stored.keys()].filter((key) => key.startsWith(prefix))),
+        prefix.length > 200
+          ? Promise.reject(new Error('The host refused these arguments.'))
+          : Promise.resolve([...stored.keys()].filter((key) => key.startsWith(prefix))),
       ),
+    },
+    secrets: {
+      get: vi.fn((profileId: string, key: string) => {
+        const refusal = refusalOf(profileId, key);
+
+        return refusal === null
+          ? Promise.resolve(secretsOf(profileId).get(key) ?? null)
+          : Promise.reject(refusal);
+      }),
+      set: vi.fn((profileId: string, key: string, value: string) => {
+        const refusal = refusalOf(profileId, key, value);
+        const kept = secretsOf(profileId);
+
+        if (refusal !== null) {
+          return Promise.reject(refusal);
+        }
+
+        if (!kept.has(key) && kept.size >= 32) {
+          return Promise.reject(new Error('This plugin already keeps 32 secrets for this person.'));
+        }
+
+        secrets.set(profileId, kept.set(key, value));
+
+        return Promise.resolve();
+      }),
+      delete: vi.fn((profileId: string, key: string) => {
+        const refusal = refusalOf(profileId, key);
+
+        if (refusal !== null) {
+          return Promise.reject(refusal);
+        }
+
+        secretsOf(profileId).delete(key);
+
+        return Promise.resolve();
+      }),
+      keys: vi.fn((profileId: string) => {
+        const refusal = keyRefusalOf(profileId);
+
+        return refusal === null
+          ? Promise.resolve([...secretsOf(profileId).keys()])
+          : Promise.reject(refusal);
+      }),
     },
     http: {
       fetch: vi.fn((url: string, init = {}) =>
@@ -215,7 +295,7 @@ const aHost = (options: HostOptions = {}) => {
     },
   } satisfies ValenceHost;
 
-  return { host, stored, playlists };
+  return { host, stored, secrets, playlists };
 };
 
 export { aHost };

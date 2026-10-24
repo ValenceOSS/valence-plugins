@@ -45,7 +45,11 @@ Each plugin is `manifest.json` plus TypeScript under `src/`, bundled by esbuild 
 Bump a plugin's `version` in its `manifest.json` and merge to `main`. The release workflow then
 tests and builds everything, signs each new version and attaches it to a release named
 `<id>-v<version>`, rebuilds and signs `catalogue.json`, and publishes it to GitHub Pages. Versions
-already released are left as they are, and the catalogue lists the packages that were published.
+already released are left as they are, and the catalogue lists each plugin's newest version with up
+to 20 earlier ones, so a server too old for the newest can still install one it can run.
+
+A plugin whose code changed must have a new version: the checks on a pull request, and the release
+itself, refuse a plugin that builds differently from its released package under the same version.
 
 To write your own plugin, start from
 [valence-plugin-template](https://github.com/ValenceOSS/valence-plugin-template).

@@ -16,3 +16,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - name: Refuse a changed plugin that kept its version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: pnpm exec tsx scripts/checkVersionsBumped.ts
