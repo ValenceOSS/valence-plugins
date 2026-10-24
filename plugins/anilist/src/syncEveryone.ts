@@ -44,7 +44,12 @@ const syncEveryone = async (
     const profileId = key.slice(jobKeyFor('').length);
 
     if (!everyone.has(profileId)) {
-      await forgetProfile(valence, profileId);
+      await forgetProfile(valence, profileId).catch((failure: unknown) => {
+        valence.log.warn('Could not let go of a removed profile', {
+          profile: profileId,
+          problem: failure instanceof Error ? failure.message : 'unknown',
+        });
+      });
     }
   }
 
