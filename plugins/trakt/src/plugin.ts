@@ -1,6 +1,7 @@
 import { definePlugin } from '@ValenceSDK/host/definePlugin';
 import { actOnHistory } from './actOnHistory';
 import { continueHistoryJob } from './continueHistoryJob';
+import { forgetProfile } from './forgetProfile';
 import { pushWatch } from './pushWatch';
 import { rememberAccount } from './rememberAccount';
 import { renderHistory } from './renderHistory';
@@ -20,7 +21,11 @@ definePlugin({
     },
   },
   events: async (event, { valence }) => {
-    await pushWatch(valence, event);
+    if (event.topic === 'profile.removed' && event.profileId !== null) {
+      await forgetProfile(valence, event.profileId);
+    } else {
+      await pushWatch(valence, event);
+    }
   },
   onAccountConnected: async ({ valence }, { profileId }) => {
     const now = new Date();

@@ -1,6 +1,7 @@
 import { aHost } from '@Shared/testing/aHost';
 import { aMedia } from '@Shared/testing/aMedia';
 import { pushWatch } from './pushWatch';
+import { syncEveryone } from './syncEveryone';
 import { traktAnswers } from './testing/traktAnswers';
 import { traktLibrary } from './testing/traktLibrary';
 
@@ -31,8 +32,6 @@ describe('pushWatch', () => {
     expect(host.log.info).toHaveBeenCalledWith('Added a finished watch to Trakt', {
       profile: 'p1',
       media: 'e2',
-      kind: 'episode',
-      answer: expect.stringContaining('added'),
     });
     expect(posted(host)).toEqual({
       shows: [
@@ -101,13 +100,106 @@ describe('pushWatch', () => {
     ]);
   });
 
-  it('fails loudly when Trakt refuses', async () => {
+  it('keeps a finish Trakt can’t take just then, and sends it again in the next run', async () => {
+    let isDown = true;
+    const { host, stored } = aHost({
+      ...connected,
+      library: traktLibrary(),
+      answers: (url, init) => (isDown ? { status: 503, text: '' } : traktAnswers([])(url, init)),
+    });
+
+    expect(await pushWatch(host, finished)).toBe(false);
+    expect([...stored.keys()].filter((key) => key.startsWith('push:'))).toHaveLength(1);
+
+    isDown = false;
+    await syncEveryone(host, new Date(finished.occurredAt));
+
+    expect([...stored.keys()].filter((key) => key.startsWith('push:'))).toEqual([]);
+    expect(
+      host.http.fetch.mock.calls.filter(([url]) => url === 'https://api.trakt.tv/sync/history'),
+    ).toHaveLength(2);
+  });
+
+  it('sends the same finish only once within a few hours', async () => {
+    const { host } = aHost({ ...connected, library: traktLibrary() });
+
+    expect(await pushWatch(host, finished)).toBe(true);
+    expect(await pushWatch(host, { ...finished, occurredAt: '2026-10-05T21:40:00.000Z' })).toBe(
+      false,
+    );
+    expect(await pushWatch(host, { ...finished, occurredAt: '2026-10-06T21:40:00.000Z' })).toBe(
+      true,
+    );
+  });
+
+  it('tells Trakt not finding what it was sent apart from adding it', async () => {
     const { host } = aHost({
       ...connected,
       library: traktLibrary(),
-      answers: () => ({ status: 503, text: '' }),
+      answers: () => ({
+        status: 201,
+        text: JSON.stringify({ added: { movies: 0, episodes: 0 }, not_found: { shows: [{}] } }),
+      }),
     });
 
-    await expect(pushWatch(host, finished)).rejects.toThrow('Trakt answered 503');
+    expect(await pushWatch(host, finished)).toBe(false);
+    expect(host.log.info).toHaveBeenCalledWith('Trakt could not find a finished watch', {
+      profile: 'p1',
+      media: 'e2',
+    });
+  });
+
+  it('logs a finish Trakt refuses for good, and one it may have kept, without sending either again', async () => {
+    for (const status of [400, 500]) {
+      const { host, stored } = aHost({
+        ...connected,
+        library: traktLibrary(),
+        answers: () => ({ status, text: '' }),
+      });
+
+      expect(await pushWatch(host, finished)).toBe(false);
+      expect(host.log.warn).toHaveBeenCalledTimes(1);
+      expect([...stored.keys()].filter((key) => key.startsWith('push:'))).toEqual([]);
+    }
+  });
+
+  it('sends every waiting finish again in one call, and lets go of one more than two weeks old', async () => {
+    const { host, stored } = aHost({ ...connected, library: traktLibrary() });
+
+    for (const [mediaId, watchedAt] of [
+      ['e2', '2026-10-05T21:30:00.000Z'],
+      ['film', '2026-10-05T22:30:00.000Z'],
+      ['e2', '2026-09-01T21:30:00.000Z'],
+    ] as const) {
+      stored.set(`push:p1:${watchedAt}:${mediaId}`, { mediaId, watchedAt });
+    }
+
+    await syncEveryone(host, new Date('2026-10-06T08:00:00.000Z'));
+
+    const posts = host.http.fetch.mock.calls.filter(
+      ([url]) => url === 'https://api.trakt.tv/sync/history',
+    );
+
+    expect(posts).toHaveLength(1);
+    expect(JSON.parse(posts[0]?.[1]?.body ?? '{}')).toMatchObject({
+      movies: [{ watched_at: '2026-10-05T22:30:00.000Z' }],
+      shows: [{ seasons: [{ episodes: [{ watched_at: '2026-10-05T21:30:00.000Z' }] }] }],
+    });
+    expect([...stored.keys()].filter((key) => key.startsWith('push:'))).toEqual([]);
+  });
+
+  it('keeps a finish when Trakt can’t be reached, or its sign-in needs putting right, and lets one cut off part way go', async () => {
+    for (const [answers, isKept] of [
+      [() => Promise.reject(new Error('getaddrinfo ENOTFOUND api.trakt.tv')), true],
+      [() => Promise.reject(new Error('The plugin’s request took too long.')), false],
+      [() => Promise.resolve({ status: 403, text: '', headers: {} }), true],
+    ] as const) {
+      const { host, stored } = aHost({ ...connected, library: traktLibrary() });
+
+      host.http.fetch.mockImplementation(answers);
+      await pushWatch(host, finished);
+
+      expect([...stored.keys()].some((key) => key.startsWith('push:'))).toBe(isKept);
+    }
   });
 });
