@@ -24,18 +24,24 @@ const startImport = async (
   now: Date,
 ): Promise<ImportJob> => {
   const lists = await connectedLists(valence, profileId);
-  const read = await Promise.all(
-    lists.map(({ provider, token }) => {
-      if (token === null) {
-        throw new Error(
-          `The ${provider === 'anilist' ? 'AniList' : 'MyAnimeList'} connection could not be renewed just now`,
-        );
-      }
+  const unrenewed = lists.find((list) => list.token === null);
 
-      return provider === 'anilist'
-        ? readAniListEntries(valence, token)
-        : readMalEntries(valence, token);
-    }),
+  if (unrenewed !== undefined) {
+    throw new Error(
+      `The ${unrenewed.provider === 'anilist' ? 'AniList' : 'MyAnimeList'} connection could not be renewed just now`,
+    );
+  }
+
+  const read = await Promise.all(
+    lists.flatMap(({ provider, token }) =>
+      token === null
+        ? []
+        : [
+            provider === 'anilist'
+              ? readAniListEntries(valence, token)
+              : readMalEntries(valence, token),
+          ],
+    ),
   );
   const byMal = new Map<string, AnimeEntry>();
   const entries: AnimeEntry[] = [];
