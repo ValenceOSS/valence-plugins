@@ -4,6 +4,7 @@ import type { Surface } from '@ValenceSDK/surface/SurfaceSchema';
 import { continueMusicImport } from './continueMusicImport';
 import { finishMusicImport } from './finishMusicImport';
 import { IMPORTING } from './IMPORTING';
+import { STOP_ASKED } from './STOP_ASKED';
 import type { PlaylistLink } from './readPlaylistLink';
 import { readMusicImportJob } from './readMusicImportJob';
 import { readPlaylistLink } from './readPlaylistLink';
@@ -42,6 +43,12 @@ const actOnImport = async (
   }
 
   if (request.action.id === 'stop') {
+    if (IMPORTING.has(viewer.profileId)) {
+      STOP_ASKED.add(viewer.profileId);
+
+      return renderImport(context, 'Stopping once the songs being added now are in.');
+    }
+
     const stopping = await readMusicImportJob(valence, viewer.profileId);
 
     if (stopping !== null && stopping.finishedAt === null) {

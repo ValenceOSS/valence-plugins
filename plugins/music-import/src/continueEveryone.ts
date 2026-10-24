@@ -47,7 +47,13 @@ const continueEveryone = async (
       moved += job === null ? 0 : 1;
 
       while (job !== null && job.finishedAt === null && Date.now() < startedAt + budgetMs) {
+        const before = job.next;
+
         job = await continueMusicImport(valence, profile.id, now);
+
+        if (job !== null && job.finishedAt === null && job.next === before) {
+          break;
+        }
       }
     } catch (failure) {
       valence.log.warn('Could not carry on a playlist import', {

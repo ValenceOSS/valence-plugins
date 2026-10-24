@@ -1,5 +1,5 @@
 import type { ValenceHost } from '@ValenceSDK/host/ValenceHost';
-import { cutTo } from '@Shared/cutTo';
+import { shownAs } from '@Shared/shownAs';
 import { jobKeyFor } from './jobKeyFor';
 import type { MusicImportJob } from './MusicImportJob';
 import type { SourcePlaylist } from './SourcePlaylist';
@@ -24,10 +24,8 @@ const startMusicImport = async (
   shouldRequest: boolean,
   now: Date,
 ): Promise<MusicImportJob> => {
-  const name =
-    playlist.name.trim() === ''
-      ? 'Imported playlist'
-      : cutTo(playlist.name.trim(), MOST_NAME_CHARACTERS);
+  const cleaned = shownAs(playlist.name, MOST_NAME_CHARACTERS).trim();
+  const name = cleaned === '' ? 'Imported playlist' : cleaned;
   const made = await valence.playlists.create(profileId, {
     name,
     description: `Imported from ${playlist.source === 'spotify' ? 'Spotify' : 'Apple Music'}`,

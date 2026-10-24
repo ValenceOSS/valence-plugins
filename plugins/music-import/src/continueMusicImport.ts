@@ -4,6 +4,7 @@ import { IMPORTING } from './IMPORTING';
 import { jobKeyFor } from './jobKeyFor';
 import type { MusicImportJob } from './MusicImportJob';
 import { readMusicImportJob } from './readMusicImportJob';
+import { STOP_ASKED } from './STOP_ASKED';
 import { songOf } from './songOf';
 
 const SONGS_AT_A_TIME = 25;
@@ -13,7 +14,8 @@ const SONGS_AT_A_TIME = 25;
  * library does not have as a missing song in its place, which Valence fills in once it arrives.
  * How far it got is saved before the songs are added, so a failure afterwards never adds them
  * twice; a failed add is put back and tried again next time, unless the playlist itself is gone,
- * which stops the import. Only one carries a given import on at a time.
+ * which stops the import. Only one carries a given import on at a time, and a stop asked for
+ * while it runs takes effect once its songs are in.
  *
  * @param valence - The host.
  * @param profileId - Whose import.
@@ -91,6 +93,14 @@ const continueMusicImport = async (
       : moved;
   } finally {
     IMPORTING.delete(profileId);
+
+    if (STOP_ASKED.delete(profileId)) {
+      const stopping = await readMusicImportJob(valence, profileId);
+
+      if (stopping !== null && stopping.finishedAt === null) {
+        await finishMusicImport(valence, profileId, stopping, now, 'stopped');
+      }
+    }
   }
 };
 

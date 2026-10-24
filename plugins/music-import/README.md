@@ -26,16 +26,17 @@ playlist are read, and you are told if it had more. Podcast episodes are left ou
 
 Without the Spotify settings, Spotify cannot be connected, and Spotify links are read only through
 a connected account. Spotify's own rules for apps in Development Mode apply: the app's owner needs
-Spotify Premium, and only the people added to the app on Spotify's dashboard can connect it. Without the Apple Music token, Apple Music links cannot be read.
+Spotify Premium, and only the people added to the app on Spotify's dashboard can connect it.
+Without the Apple Music token, Apple Music links cannot be read.
 
 ## What it asks for
 
-| Permission                       | Why                                                                               |
-| -------------------------------- | --------------------------------------------------------------------------------- |
-| Network: Spotify and Apple Music | To read playlists                                                                 |
-| Accounts: Spotify                | To read your own playlists, only once you connect it                              |
-| Library: read                    | To find each song                                                                 |
-| Playlists: write                 | To make the playlist and add the songs                                            |
-| Requests: create                 | To ask for albums you do not have, when you choose to                             |
-| Storage: 10 MB                   | To remember how far an import has got, and to forget it when a profile is removed |
-| Notifications                    | To tell you when an import finishes                                               |
+| Permission                       | Why                                                                          |
+| -------------------------------- | ---------------------------------------------------------------------------- |
+| Network: Spotify and Apple Music | To read playlists                                                            |
+| Accounts: Spotify                | To read your own playlists, only once you connect it                         |
+| Library: read                    | To find each song                                                            |
+| Playlists: write                 | To make the playlist and add the songs                                       |
+| Requests: create                 | To ask for albums you do not have, when you choose to                        |
+| Storage: 10 MB                   | To remember how far an import has got, forgotten once its profile is removed |
+| Notifications                    | To tell you when an import finishes                                          |

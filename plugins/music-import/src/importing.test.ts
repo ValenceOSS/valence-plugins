@@ -1,6 +1,7 @@
 import { aHost } from '@Shared/testing/aHost';
 import { aMedia } from '@Shared/testing/aMedia';
 import { continueEveryone } from './continueEveryone';
+import { actOnImport } from './actOnImport';
 import { continueMusicImport } from './continueMusicImport';
 import { forgetProfile } from './forgetProfile';
 import { startMusicImport } from './startMusicImport';
@@ -241,6 +242,50 @@ describe('importing a playlist', () => {
     expect(host.log.warn).toHaveBeenCalledWith(
       'Could not request the albums of an imported playlist',
       { problem: 'requests offline' },
+    );
+  });
+
+  it('stops once the songs being added are in, when asked to stop while they are added', async () => {
+    const { host, stored } = aHost();
+
+    await startMusicImport(host, 'p1', playlist(60), false, NOW);
+
+    const running = continueMusicImport(host, 'p1', NOW);
+
+    await actOnImport(
+      { valence: host, viewer: { profileId: 'p1', isAdmin: false, nodes: [] }, subject: null },
+      { action: { id: 'stop' }, fields: {} },
+      NOW,
+    );
+    await running;
+
+    expect(stored.get('import:p1')).toMatchObject({ isStopped: true, next: 25 });
+    expect(await continueMusicImport(host, 'p1', NOW)).toMatchObject({ next: 25 });
+    expect(host.playlists.add).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits rather than asking again and again while the page carries an import on', async () => {
+    const { host } = aHost();
+
+    await startMusicImport(host, 'p1', playlist(60), false, NOW);
+
+    const page = continueMusicImport(host, 'p1', NOW);
+
+    host.storage.get.mockClear();
+    await continueEveryone(host, NOW, 60_000);
+    await page;
+
+    expect(host.storage.get.mock.calls.length).toBeLessThan(10);
+  });
+
+  it('cleans a playlist’s name of characters a page may not show', async () => {
+    const { host } = aHost();
+
+    expect((await startMusicImport(host, 'p1', playlist(1, 'Mix\u202e'), false, NOW)).name).toBe(
+      'Mix',
+    );
+    expect((await startMusicImport(host, 'p2', playlist(1, '\u202e'), false, NOW)).name).toBe(
+      'Imported playlist',
     );
   });
 });
