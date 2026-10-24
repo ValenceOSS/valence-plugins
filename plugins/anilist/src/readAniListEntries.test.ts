@@ -11,13 +11,13 @@ describe('readAniListEntries', () => {
     expect(entries).toEqual([
       {
         provider: 'anilist',
-        id: '154587',
-        anilistId: '154587',
-        malId: '52991',
-        titles: ['Frieren: Beyond Journey’s End', 'Sousou no Frieren', 'Frieren'],
+        id: '1001',
+        anilistId: '1001',
+        malId: '2001',
+        titles: ['Example Quest', 'Rei no Bouken', 'Example'],
         year: 2023,
         progress: 3,
-        episodes: 28,
+        episodes: 12,
         status: 'watching',
       },
     ]);

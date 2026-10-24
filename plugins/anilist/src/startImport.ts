@@ -7,9 +7,9 @@ import { readAniListEntries } from './readAniListEntries';
 import { readMalEntries } from './readMalEntries';
 
 /**
- * Starts importing somebody's lists: reads every connected list, keeps only what they have begun
- * watching, and folds a show on both lists into one entry carrying both ids and the furthest
- * progress. The work itself happens a few shows at a time, in `continueImport`.
+ * Starts importing somebody's lists: reads every connected list, keeps what they have begun or
+ * finished watching, and folds a show on both lists into one entry carrying both ids and the
+ * furthest progress. The work itself happens a few shows at a time, in `continueImport`.
  *
  * @param valence - The host.
  * @param profileId - Whose lists.
@@ -30,7 +30,11 @@ const startImport = async (
   const byMal = new Map<string, AnimeEntry>();
   const entries: AnimeEntry[] = [];
 
-  for (const entry of read.flat().filter((each) => each.progress > 0)) {
+  for (const entry of read
+    .flat()
+    .filter(
+      (each) => each.progress > 0 || each.status === 'completed' || each.status === 'repeating',
+    )) {
     const twin = entry.malId === null ? undefined : byMal.get(entry.malId);
 
     if (twin === undefined) {
@@ -54,6 +58,7 @@ const startImport = async (
     unmatched: [],
     startedAt: now.toISOString(),
     finishedAt: null,
+    isLinked: true,
   };
 
   await valence.storage.set(jobKeyFor(profileId), job);

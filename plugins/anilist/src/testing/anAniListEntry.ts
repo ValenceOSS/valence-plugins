@@ -1,25 +1,33 @@
 /**
- * One show on an AniList list, as AniList sends it.
+ * One show on an AniList list, as AniList sends it: the first season of a made-up show unless the
+ * test says otherwise.
  *
  * @param changes - What this test changes.
  * @returns The entry.
  */
 const anAniListEntry = (
-  changes: { id?: number; progress?: number; title?: string; year?: number } = {},
+  changes: {
+    id?: number;
+    status?: string;
+    progress?: number;
+    episodes?: number;
+    title?: string;
+    year?: number;
+  } = {},
 ) => ({
-  status: 'CURRENT',
+  status: changes.status ?? 'CURRENT',
   progress: changes.progress ?? 3,
   media: {
-    id: changes.id ?? 154_587,
-    idMal: changes.id === undefined ? 52_991 : changes.id + 100_000,
-    episodes: 28,
+    id: changes.id ?? 1001,
+    idMal: changes.id === undefined ? 2001 : changes.id + 1000,
+    episodes: changes.episodes ?? 12,
     seasonYear: changes.year ?? 2023,
     title: {
-      romaji: 'Sousou no Frieren',
-      english: changes.title ?? 'Frieren: Beyond Journey’s End',
+      romaji: 'Rei no Bouken',
+      english: changes.title ?? 'Example Quest',
       native: null,
     },
-    synonyms: ['Frieren'],
+    synonyms: ['Example'],
   },
 });
 

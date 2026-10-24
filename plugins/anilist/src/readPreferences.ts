@@ -1,6 +1,7 @@
 import type { ValenceHost } from '@ValenceSDK/host/ValenceHost';
 import type { Preferences } from './Preferences';
 import { PreferencesSchema } from './Preferences';
+import { preferencesKeyFor } from './preferencesKeyFor';
 
 /**
  * What somebody chose for their lists, or the default of passing progress back as they watch.
@@ -10,7 +11,7 @@ import { PreferencesSchema } from './Preferences';
  * @returns The choices.
  */
 const readPreferences = async (valence: ValenceHost, profileId: string): Promise<Preferences> => {
-  const read = PreferencesSchema.safeParse(await valence.storage.get(`preferences:${profileId}`));
+  const read = PreferencesSchema.safeParse(await valence.storage.get(preferencesKeyFor(profileId)));
 
   return read.success ? read.data : { twoWay: true };
 };

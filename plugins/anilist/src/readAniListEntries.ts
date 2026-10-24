@@ -1,9 +1,8 @@
 import { z } from 'zod';
 import type { ValenceHost } from '@ValenceSDK/host/ValenceHost';
 import { readJsonAs } from '@Shared/readJsonAs';
+import { askAniList } from './askAniList';
 import type { AnimeEntry } from './AnimeEntry';
-
-const GRAPHQL = 'https://graphql.anilist.co';
 
 const STATUSES = {
   CURRENT: 'watching',
@@ -51,31 +50,6 @@ const ListSchema = z.object({
     }),
   }),
 });
-
-/**
- * Asks AniList a GraphQL question as the signed-in viewer.
- *
- * @param valence - The host.
- * @param token - The viewer's AniList token.
- * @param query - The query.
- * @param variables - Its variables.
- * @returns The answer, as `valence.http.fetch` gives it.
- */
-const askAniList = (
-  valence: ValenceHost,
-  token: string,
-  query: string,
-  variables: Record<string, number>,
-) =>
-  valence.http.fetch(GRAPHQL, {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${token}`,
-      'content-type': 'application/json',
-      accept: 'application/json',
-    },
-    body: JSON.stringify({ query, variables }),
-  });
 
 /**
  * Reads everything on somebody's AniList anime list.

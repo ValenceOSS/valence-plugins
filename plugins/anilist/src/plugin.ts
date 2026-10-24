@@ -1,5 +1,6 @@
 import { definePlugin } from '@ValenceSDK/host/definePlugin';
 import { actOnTracking } from './actOnTracking';
+import { forgetProfile } from './forgetProfile';
 import { pushProgress } from './pushProgress';
 import { renderSeriesPanel } from './renderSeriesPanel';
 import { renderTracking } from './renderTracking';
@@ -21,7 +22,11 @@ definePlugin({
     },
   },
   events: async (event, { valence }) => {
-    await pushProgress(valence, event);
+    if (event.topic === 'profile.removed' && event.profileId !== null) {
+      await forgetProfile(valence, event.profileId);
+    } else {
+      await pushProgress(valence, event);
+    }
   },
   onAccountConnected: async ({ valence }, { profileId }) => {
     await valence.notifications.send(profileId, {

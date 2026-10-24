@@ -9,6 +9,7 @@ const ImportJobSchema = z.object({
   unmatched: z.array(z.string()),
   startedAt: z.string(),
   finishedAt: z.string().nullable(),
+  isLinked: z.boolean().default(false),
 });
 
 type ImportJob = z.infer<typeof ImportJobSchema>;

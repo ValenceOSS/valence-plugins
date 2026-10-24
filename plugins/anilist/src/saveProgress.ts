@@ -1,58 +1,39 @@
 import type { ValenceHost } from '@ValenceSDK/host/ValenceHost';
-import { formBody } from '@Shared/formBody';
+import { nextListState } from './nextListState';
 import type { Provider } from './Provider';
+import { readListState } from './readListState';
+import { writeListState } from './writeListState';
 
 /**
- * Tells AniList or MyAnimeList how many episodes of a show somebody has watched, marking it
- * completed when that is every episode.
+ * Tells AniList or MyAnimeList that somebody watched an episode of a show, reading their entry
+ * first so progress only rises and a completed show is never set back.
  *
  * @param valence - The host.
  * @param provider - Which service.
- * @param token - The viewer's token there.
+ * @param token - Their token there.
  * @param id - The show's id on that service.
- * @param progress - Episodes watched.
- * @param episodes - How many episodes the show has, where known.
+ * @param watched - The number, within this entry, of the episode just finished.
+ * @param episodes - How many episodes the entry has, where known.
+ * @returns Whether the list was changed.
  */
 const saveProgress = async (
   valence: ValenceHost,
   provider: Provider,
   token: string,
   id: string,
-  progress: number,
+  watched: number,
   episodes: number | null,
-): Promise<void> => {
-  const isDone = episodes !== null && progress >= episodes;
-  const answer =
-    provider === 'anilist'
-      ? await valence.http.fetch('https://graphql.anilist.co', {
-          method: 'POST',
-          headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-          body: JSON.stringify({
-            query:
-              'mutation ($media: Int, $progress: Int, $status: MediaListStatus) { SaveMediaListEntry(mediaId: $media, progress: $progress, status: $status) { id } }',
-            variables: { media: Number(id), progress, status: isDone ? 'COMPLETED' : 'CURRENT' },
-          }),
-        })
-      : await valence.http.fetch(
-          `https://api.myanimelist.net/v2/anime/${encodeURIComponent(id)}/my_list_status`,
-          {
-            method: 'PATCH',
-            headers: {
-              authorization: `Bearer ${token}`,
-              'content-type': 'application/x-www-form-urlencoded',
-            },
-            body: formBody({
-              num_watched_episodes: progress.toString(),
-              status: isDone ? 'completed' : 'watching',
-            }),
-          },
-        );
+): Promise<boolean> => {
+  const current = await readListState(valence, provider, token, id);
+  const next = nextListState(current.state, watched, episodes ?? current.episodes);
 
-  if (answer.status < 200 || answer.status >= 300) {
-    throw new Error(
-      `${provider === 'anilist' ? 'AniList' : 'MyAnimeList'} answered ${answer.status.toString()}`,
-    );
+  if (next === null) {
+    return false;
   }
+
+  await writeListState(valence, provider, token, id, next);
+
+  return true;
 };
 
 export { saveProgress };

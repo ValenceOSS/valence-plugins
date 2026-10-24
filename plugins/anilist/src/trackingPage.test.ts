@@ -5,7 +5,7 @@ import { actOnTracking } from './actOnTracking';
 import { renderTracking } from './renderTracking';
 import { aniListAnswers } from './testing/aniListAnswers';
 import { anAniListEntry } from './testing/anAniListEntry';
-import { frierenLibrary } from './testing/frierenLibrary';
+import { exampleLibrary } from './testing/exampleLibrary';
 
 const NOW = new Date('2026-09-28T12:00:00.000Z');
 
@@ -58,7 +58,7 @@ describe('the tracking page', () => {
       settings: { anilistClientId: 'id' },
       connections: { 'p1:anilist': { accessToken: 'a', account: null } },
       answers: aniListAnswers([anAniListEntry(), anAniListEntry({ id: 1, title: 'Nowhere' })]),
-      library: frierenLibrary(),
+      library: exampleLibrary(),
     });
     const page = await actOnTracking(
       contextFor(host),
