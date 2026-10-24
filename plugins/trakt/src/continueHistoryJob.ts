@@ -7,6 +7,7 @@ import { jobKeyFor } from './jobKeyFor';
 import { nameOf } from './nameOf';
 import { readHistoryJob } from './readHistoryJob';
 import { readHistoryPage } from './readHistoryPage';
+import { IMPORTING } from './IMPORTING';
 import { traktSessionFor } from './traktSessionFor';
 
 const MOST_UNMATCHED_KEPT = 200;
@@ -18,24 +19,21 @@ const MOST_UNMATCHED_KEPT = 200;
 const BUDGET_MS = 8000;
 
 /**
- * Carries somebody's import or sync on by as many pages of their history as fit in one run: finds
- * each play's film or episode in the library and marks it watched, at the time it was watched on
- * Trakt, where Valence does not already have it finished. Stops by itself when the pages run out,
- * and tells them how an import went.
+ * One step of `continueHistoryJob`, once it is sure nothing else is carrying the same read on.
  *
  * @param valence - The host.
- * @param kind - An import or a sync.
- * @param profileId - Whose history.
+ * @param kind - Which read.
+ * @param profileId - Whose.
  * @param now - The time now.
- * @param budgetMs - How long to keep starting new pages; at least one is always read.
- * @returns The job as it now stands, or nothing where none was started or Trakt is not connected.
+ * @param budgetMs - How long to keep reading pages.
+ * @returns The read as it now stands, or nothing where none was started.
  */
-const continueHistoryJob = async (
+const carryOn = async (
   valence: ValenceHost,
   kind: JobKind,
   profileId: string,
   now: Date,
-  budgetMs: number = BUDGET_MS,
+  budgetMs: number,
 ): Promise<HistoryJob | null> => {
   const job = await readHistoryJob(valence, kind, profileId);
   const session = await traktSessionFor(valence, profileId);
@@ -86,20 +84,52 @@ const continueHistoryJob = async (
     job.page += 1;
   } while (!isDone && Date.now() - started < budgetMs);
 
-  if (isDone) {
-    job.finishedAt = now.toISOString();
-
-    if (kind === 'import') {
-      await valence.notifications.send(profileId, {
-        title: 'Trakt history imported',
-        body: `Found ${job.matched.toString()} of ${job.plays.toString()} plays in your library and marked ${job.marked.toString()} watched.`,
-      });
-    }
-  }
-
+  job.finishedAt = isDone ? now.toISOString() : null;
   await valence.storage.set(jobKeyFor(kind, profileId), job);
 
+  if (isDone && kind === 'import') {
+    await valence.notifications.send(profileId, {
+      title: 'Trakt history imported',
+      body: `Found ${job.matched.toString()} of ${job.plays.toString()} plays in your library and marked ${job.marked.toString()} watched.`,
+    });
+  }
+
   return job;
+};
+
+/**
+ * Carries somebody's import or sync on by as many pages of their history as fit in one run: finds
+ * each play's film or episode in the library and marks it watched, at the time it was watched on
+ * Trakt, where Valence does not already have it finished. Stops by itself when the pages run out,
+ * and tells them how an import went.
+ *
+ * @param valence - The host.
+ * @param kind - An import or a sync.
+ * @param profileId - Whose history.
+ * @param now - The time now.
+ * @param budgetMs - How long to keep starting new pages; at least one is always read.
+ * @returns The job as it now stands, or nothing where none was started or Trakt is not connected.
+ */
+const continueHistoryJob = async (
+  valence: ValenceHost,
+  kind: JobKind,
+  profileId: string,
+  now: Date,
+  budgetMs: number = BUDGET_MS,
+): Promise<HistoryJob | null> => {
+  const guard = `${kind}:${profileId}`;
+
+  if (IMPORTING.has(guard)) {
+    return readHistoryJob(valence, kind, profileId);
+  }
+
+  IMPORTING.add(guard);
+
+  try {
+    return await carryOn(valence, kind, profileId, now, budgetMs);
+  } finally {
+    IMPORTING.delete(guard);
+  }
 };
 
 export { continueHistoryJob };

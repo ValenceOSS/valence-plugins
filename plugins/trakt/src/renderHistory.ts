@@ -1,3 +1,4 @@
+import { shownAs } from '@Shared/shownAs';
 import type { SurfaceContext } from '@ValenceSDK/host/PluginDefinition';
 import type { SurfaceBlock } from '@ValenceSDK/surface/SurfaceBlockSchema';
 import type { Surface } from '@ValenceSDK/surface/SurfaceSchema';
@@ -46,7 +47,7 @@ const importBlocks = (job: HistoryJob): SurfaceBlock[] => {
             title: 'Not in your library',
             rows: job.unmatched
               .slice(0, MOST_UNMATCHED_SHOWN)
-              .map((title) => ({ type: 'row' as const, label: title })),
+              .map((title) => ({ type: 'row' as const, label: shownAs(title, 120) })),
           },
         ]),
   ];
@@ -80,7 +81,8 @@ const renderHistory = async (
       ? {
           type: 'row',
           label: 'Trakt',
-          detail: typeof account === 'string' ? `Connected as ${account}` : 'Connected',
+          detail:
+            typeof account === 'string' ? shownAs(`Connected as ${account}`, 120) : 'Connected',
           icon: 'check',
           action: {
             id: 'valence.accounts.disconnect',

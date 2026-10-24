@@ -63,4 +63,42 @@ describe('syncEveryone', () => {
       problem: 'Trakt answered 429',
     });
   });
+
+  it('passes over someone who never used Trakt without a word, and one failure stops nobody else', async () => {
+    const { host, stored } = aHost({
+      settings: { traktClientId: 'client' },
+      profiles: [
+        { id: 'p1', name: 'Marques' },
+        { id: 'p2', name: 'Guest' },
+        { id: 'p3', name: 'Visitor' },
+      ],
+      connections: {
+        'p1:trakt': { accessToken: 't', account: null },
+        'p2:trakt': { accessToken: 'u', account: null },
+      },
+      answers: traktAnswers([aFilmPlay()]),
+    });
+
+    host.accounts.connection.mockImplementation((profileId) =>
+      profileId === 'p3'
+        ? Promise.reject(new Error('That person has not used this plugin.'))
+        : Promise.resolve({ accessToken: 't', account: null, expiresAt: null }),
+    );
+    host.viewing.progress.mockRejectedValueOnce(new Error('library offline'));
+
+    expect(await syncEveryone(host, NOW)).toBe(1);
+    expect(host.log.warn).toHaveBeenCalledTimes(1);
+    expect(stored.get('import:p2')).toMatchObject({ finishedAt: NOW.toISOString() });
+  });
+
+  it('lets go of what was kept for a profile no longer there', async () => {
+    const { host, stored } = aHost({ profiles: [{ id: 'p1', name: 'Marques' }] });
+
+    stored.set('import:gone', { page: 1 });
+    stored.set('push:gone:2026-10-05T21:30:00.000Z:e2', { mediaId: 'e2', watchedAt: 'x' });
+    stored.set('recent:gone', []);
+    await syncEveryone(host, NOW);
+
+    expect([...stored.keys()]).toEqual(['syncStartsFrom']);
+  });
 });

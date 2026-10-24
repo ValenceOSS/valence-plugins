@@ -1,16 +1,29 @@
+import { z } from 'zod';
 import type { PluginEvent } from '@ValenceSDK/host/PluginDefinition';
 import type { ValenceHost } from '@ValenceSDK/host/ValenceHost';
-import { askTrakt } from './askTrakt';
-import { historyBodyFor } from './historyBodyFor';
+import { pushKeyFor } from './pushKeyFor';
 import { readPreferences } from './readPreferences';
+import { RECENT_KEY } from './RECENT_KEY';
+import { sendWatches } from './sendWatches';
 import { traktSessionFor } from './traktSessionFor';
+
+/** How long after sending a finish the same thing finishing again counts as the same viewing,
+ * where its length isn't known. */
+const SAME_VIEWING_MS = 3 * 3_600_000;
+
+/** How many recent finishes are remembered for that. */
+const MOST_REMEMBERED = 50;
+
+const RecentSchema = z.array(z.object({ mediaId: z.string(), at: z.number() }));
 
 /**
  * When somebody finishes a film or an episode, adds it to their Trakt history at the time they
- * finished, if they have Trakt connected and have not turned this off. For anybody with Trakt
- * connected, each film or episode they finish is logged with what became of it, sent or why not, so
- * an operator can tell where a watch went. Songs and books are none of Trakt's business, and pass
- * without a word.
+ * finished, if they have Trakt connected and have not turned this off. Finishing the same thing
+ * again within its own length, such as stopping in the credits and then once more at the end,
+ * counts as the same viewing and isn't sent twice, since Trakt keeps every play it is sent. A
+ * finish Trakt can't take just then waits for the hourly run. Each is logged with what became of
+ * it, so an operator can tell where a watch went. Songs and books are none of Trakt's business, and
+ * pass without a word.
  *
  * @param valence - The host.
  * @param event - What happened.
@@ -18,6 +31,12 @@ import { traktSessionFor } from './traktSessionFor';
  */
 const pushWatch = async (valence: ValenceHost, event: PluginEvent): Promise<boolean> => {
   if (event.topic !== 'playback.finished' || event.profileId === null || event.mediaId === null) {
+    return false;
+  }
+
+  const media = await valence.library.get(event.mediaId);
+
+  if (media !== null && media.kind !== 'film' && media.kind !== 'episode') {
     return false;
   }
 
@@ -35,36 +54,51 @@ const pushWatch = async (valence: ValenceHost, event: PluginEvent): Promise<bool
     return false;
   }
 
-  const media = await valence.library.get(event.mediaId);
+  const recentKey = `${RECENT_KEY}${event.profileId}`;
+  const read = RecentSchema.safeParse(await valence.storage.get(recentKey));
+  const recent = read.success ? read.data : [];
+  const at = Date.parse(event.occurredAt);
+  const window =
+    event.durationSeconds !== null && event.durationSeconds > 0
+      ? event.durationSeconds * 1000
+      : SAME_VIEWING_MS;
 
-  if (media !== null && media.kind !== 'film' && media.kind !== 'episode') {
-    return false;
-  }
-
-  const body = media === null ? null : await historyBodyFor(valence, media, event.occurredAt);
-
-  if (body === null) {
-    valence.log.info('Did not send a finish to Trakt: not a film or a numbered episode', {
-      ...about,
-      kind: media?.kind ?? 'not in the library',
-    });
+  if (recent.some((each) => each.mediaId === event.mediaId && at - each.at < window)) {
+    valence.log.info('Did not send a finish to Trakt: it was sent a moment ago', about);
 
     return false;
   }
 
-  const answer = await askTrakt(valence, session, '/sync/history', body);
+  const push = { mediaId: event.mediaId, watchedAt: event.occurredAt };
+  const outcome = await sendWatches(valence, session, [push]);
 
-  if (answer.status < 200 || answer.status >= 300) {
-    throw new Error(`Trakt answered ${answer.status.toString()}`);
+  if (outcome === 'nothingToSend') {
+    valence.log.info('Did not send a finish to Trakt: not a film or a numbered episode', about);
+
+    return false;
   }
 
-  valence.log.info('Added a finished watch to Trakt', {
-    ...about,
-    kind: media?.kind ?? 'unknown',
-    answer: answer.text.slice(0, 300),
-  });
+  await valence.storage.set(
+    recentKey,
+    [...recent, { mediaId: event.mediaId, at }].slice(-MOST_REMEMBERED),
+  );
 
-  return true;
+  if (outcome === 'wait') {
+    await valence.storage.set(pushKeyFor(event.profileId, push), push);
+  }
+
+  valence.log[outcome === 'refused' || outcome === 'uncertain' ? 'warn' : 'info'](
+    {
+      sent: 'Added a finished watch to Trakt',
+      notFound: 'Trakt could not find a finished watch',
+      wait: 'Trakt could not take a finish just now; it will be sent again',
+      uncertain: 'Did not send a finish to Trakt again: it may already have reached Trakt',
+      refused: 'Trakt refused a finished watch',
+    }[outcome],
+    about,
+  );
+
+  return outcome === 'sent';
 };
 
 export { pushWatch };
