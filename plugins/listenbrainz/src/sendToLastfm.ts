@@ -25,8 +25,8 @@ const ScrobblesSchema = z.object({
 
 /**
  * Sends listens to somebody's Last.fm, up to fifty scrobbles at once, or one song as playing now.
- * Last.fm can take a call yet ignore some of its scrobbles, saying why for each, so each listen gets
- * its own outcome: one over the daily limit waits, and one it ignores for good is refused.
+ * Last.fm can take a call yet ignore some of its scrobbles, saying why for each, so each listen
+ * gets its own outcome: one over the daily limit waits, and one it ignores for good is refused.
  *
  * @param valence - The host.
  * @param keys - The plugin's API key and shared secret.

@@ -38,7 +38,8 @@ type UpdateOutcome = 'idle' | 'working' | 'updated' | 'deleted';
  * being kept.
  *
  * @param valence - The host.
- * @param context - Whose playlist and their name, which a new playlist is named after so a household
+ * @param context - Whose playlist and their name, which a new playlist is named after so a
+ *   household
  *   can tell everyone's apart, their connections, choices and the plugin's Last.fm keys, whether
  *   missing albums are to be requested, and what this run has already read.
  * @param source - Which service playlist.

@@ -16,8 +16,8 @@ const PER_PERSON = [
 /**
  * Lets go of everything kept for someone whose profile is gone: their connections, waiting
  * scrobbles, choices, kept playlists and albums still to be requested. Valence forgets their sealed
- * tokens itself. The keys a later run finds a removed profile by go last, so a clean-up cut short is
- * finished next time.
+ * tokens itself. The keys a later run finds a removed profile by go last, so a clean-up cut short
+ * is finished next time.
  *
  * @param valence - The host.
  * @param profileId - The profile that was removed.

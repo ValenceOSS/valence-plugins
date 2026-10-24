@@ -181,9 +181,9 @@ const sendWaiting = async (
  * Sends somebody's waiting scrobbles, oldest first as Last.fm asks, several to a call. Each new one
  * is kept under its own key before anything is sent, and each is let go only once sent or refused
  * for good, so nothing is lost when a run fails and two runs at once never drop or double one. A
- * service that is not reached keeps the rest for the next try; one that refuses the person's
- * sign-in is disconnected and its scrobbles dropped; one whose setup on this server is broken keeps
- * them until an administrator puts it right. Only one run sends a person's scrobbles at a time. What
+ * service that is not reached keeps the rest for the next try; one that refuses the person's sign-
+ * in is disconnected and its scrobbles dropped; one whose setup on this server is broken keeps them
+ * until an administrator puts it right. Only one run sends a person's scrobbles at a time. What
  * else becomes of each is `actOnOutcome`'s.
  *
  * @param valence - The host.
