@@ -306,7 +306,7 @@ describe('scrobbling', () => {
       .filter((each) => each.to === 'listenbrainz')
       .map((each) => JSON.stringify(each.body).match(/"listen_type":"(\w+)"/u)?.[1]);
 
-    expect(listenTypes).toEqual(['import', 'single', 'single']);
+    expect(listenTypes).toEqual(['import', 'single']);
     expect(waiting(stored).filter((key) => key.includes(':listenbrainz:'))).toHaveLength(2);
   });
 
@@ -316,7 +316,7 @@ describe('scrobbling', () => {
     );
 
     await scrobble(host, finished);
-    await scrobble(host, { ...finished, mediaId: 's2', positionSeconds: 215 - 26 + 26 });
+    await scrobble(host, { ...finished, mediaId: 's2', positionSeconds: 215 });
 
     expect(waiting(stored).filter((key) => key.includes(':listenbrainz:'))).toHaveLength(2);
   });

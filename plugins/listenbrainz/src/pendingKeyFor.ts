@@ -18,6 +18,11 @@ const pendingKeyFor = (
 ): string =>
   scrobble === undefined
     ? `pending:${profileId}:`
-    : `pending:${profileId}:${scrobble.service}:${scrobble.listen.startedAt.toString().padStart(12, '0')}:${md5(`${scrobble.listen.artist}\n${scrobble.listen.title}`).slice(0, 8)}`;
+    : [
+        `pending:${profileId}`,
+        scrobble.service,
+        scrobble.listen.startedAt.toString().padStart(12, '0'),
+        md5(`${scrobble.listen.artist}\n${scrobble.listen.title}`).slice(0, 8),
+      ].join(':');
 
 export { pendingKeyFor };

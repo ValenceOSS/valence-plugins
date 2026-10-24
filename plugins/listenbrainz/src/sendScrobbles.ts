@@ -19,6 +19,17 @@ const MOST_KEPT = 500;
 /** How many each service takes in one call. */
 const AT_ONCE: Record<Service, number> = { listenbrainz: 100, lastfm: 50 };
 
+/**
+ * Whether a song is one Last.fm takes none of, which is refused on its own rather than with the
+ * rest of a batch.
+ *
+ * @param service - Where it is going.
+ * @param listen - The song.
+ * @returns Whether it is too short for that service.
+ */
+const isTooShortFor = (service: Service, listen: Listen | undefined): boolean =>
+  service === 'lastfm' && listen?.durationSeconds !== null && (listen?.durationSeconds ?? 31) <= 30;
+
 /** How long one run keeps sending, well inside the 30 seconds Valence gives each call. */
 const BUDGET_MS = 8000;
 
@@ -109,17 +120,27 @@ const sendWaiting = async (
                 kind: 'misconfigured',
                 reason: 'Last.fm is not set up on this server',
               }));
-      const first = together[0];
+      const tried = together.filter((_, index) => !isTooShortFor(service, listens[index]));
+      const first = tried[0];
       const isRefusedWhole =
-        listens.length > 1 &&
+        tried.length > 1 &&
         first?.kind === 'refused' &&
         !first.isTheirs &&
-        together.every((each) => each.kind === 'refused' && each.reason === first.reason);
+        tried.every((each) => each.kind === 'refused' && each.reason === first.reason);
       const outcomes: SendOutcome[] = [];
 
       if (isRefusedWhole) {
         for (const listen of listens) {
-          outcomes.push(await sendOne(listen));
+          const outcome = await sendOne(listen);
+
+          outcomes.push(outcome);
+
+          if (
+            (outcome.kind !== 'sent' && outcome.kind !== 'refused') ||
+            Date.now() - started > budgetMs
+          ) {
+            break;
+          }
         }
       } else {
         outcomes.push(...together);
@@ -187,19 +208,19 @@ const sendScrobbles = async (
 
   SENDING.add(profileId);
 
-  const legacy = PendingScrobblesSchema.safeParse(
-    await valence.storage.get(`pending:${profileId}`),
-  );
+  try {
+    const legacy = PendingScrobblesSchema.safeParse(
+      await valence.storage.get(`pending:${profileId}`),
+    );
 
-  if (legacy.success) {
-    for (const each of legacy.data) {
-      await valence.storage.set(pendingKeyFor(profileId, each), each);
+    if (legacy.success) {
+      for (const each of legacy.data) {
+        await valence.storage.set(pendingKeyFor(profileId, each), each);
+      }
+
+      await valence.storage.delete(`pending:${profileId}`);
     }
 
-    await valence.storage.delete(`pending:${profileId}`);
-  }
-
-  try {
     return await sendWaiting(valence, profileId, budgetMs);
   } finally {
     SENDING.delete(profileId);
