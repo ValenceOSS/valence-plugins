@@ -22,6 +22,12 @@ describe('findSeriesFor', () => {
     });
 
     expect((await findSeriesFor(host, 'p1', entry))?.id).toBe('s1');
+    expect(host.library.findByExternalId).toHaveBeenCalledWith('anilist', '1001', {
+      profileId: 'p1',
+    });
+    expect(host.library.findByExternalId).toHaveBeenCalledWith('mal', '2001', {
+      profileId: 'p1',
+    });
   });
 
   it('falls back to one exact title in a year close enough', async () => {
