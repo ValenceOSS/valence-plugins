@@ -34,7 +34,7 @@ const pushWatch = async (valence: ValenceHost, event: PluginEvent): Promise<bool
     return false;
   }
 
-  const media = await valence.library.get(event.mediaId);
+  const media = await valence.library.get(event.mediaId, { profileId: event.profileId });
 
   if (media !== null && media.kind !== 'film' && media.kind !== 'episode') {
     return false;
@@ -77,7 +77,8 @@ const pushWatch = async (valence: ValenceHost, event: PluginEvent): Promise<bool
   }
 
   const push = { mediaId: event.mediaId, watchedAt: event.occurredAt };
-  const outcome = session === 'notNow' ? 'wait' : await sendWatches(valence, session, [push]);
+  const outcome =
+    session === 'notNow' ? 'wait' : await sendWatches(valence, event.profileId, session, [push]);
 
   if (outcome === 'nothingToSend') {
     valence.log.info('Did not send a finish to Trakt: not a film or a numbered episode', about);

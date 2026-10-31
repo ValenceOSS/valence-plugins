@@ -37,12 +37,14 @@ const idsOf = (media: MediaRef, imdb: string | undefined = media.externalIds.imd
  * has none. Without ids, the title and year, which Trakt matches on next.
  *
  * @param valence - The host.
+ * @param profileId - Who finished it.
  * @param media - What was finished.
  * @param watchedAt - When.
  * @returns The body, or nothing where it is not a film or a numbered episode.
  */
 const historyBodyFor = async (
   valence: ValenceHost,
+  profileId: string,
   media: MediaRef,
   watchedAt: string,
 ): Promise<object | null> => {
@@ -68,7 +70,7 @@ const historyBodyFor = async (
     return null;
   }
 
-  const series = await valence.library.get(media.seriesId);
+  const series = await valence.library.get(media.seriesId, { profileId });
 
   if (series === null) {
     return null;

@@ -4,6 +4,7 @@ import type {
   MediaDetails,
   MediaRef,
   PlaylistContents,
+  Reading,
   Stored,
   ValenceHost,
 } from '@ValenceSDK/host/ValenceHost';
@@ -30,7 +31,8 @@ type HostOptions = {
  * secrets are maps, read back through the same JSON round trip the real host gives them, secrets
  * and keys are held to the real host's limits, the web answers as the test says, what is marked watched and
  * playlists are kept as they are changed, songs are found as Valence finds them, the library is
- * listed by title and holds what the test says, and every other call is recorded.
+ * listed by title and holds what the test says, a library read that names nobody is refused as it
+ * is in the background, and every other call is recorded.
  *
  * @param options - The settings, web answers, connected accounts, library and playlists this test
  *   starts with.
@@ -62,6 +64,10 @@ const aHost = (options: HostOptions = {}) => {
 
     return playlist?.profileId === profileId ? playlist : null;
   };
+  const unnamed = (reading: Reading | undefined): Promise<never> | null =>
+    reading?.profileId === undefined
+      ? Promise.reject(new Error('The host refused a library read that names nobody.'))
+      : null;
   const host = {
     plugin: { id: 'test', version: '1.0.0' },
     settings: { read: vi.fn(() => Promise.resolve(options.settings ?? {})) },
@@ -168,27 +174,35 @@ const aHost = (options: HostOptions = {}) => {
       list: vi.fn(() => Promise.resolve(options.profiles ?? [{ id: 'p1', name: 'Marques' }])),
     },
     library: {
-      get: vi.fn((mediaId: string) =>
-        Promise.resolve(library.find((media) => media.id === mediaId) ?? null),
+      get: vi.fn<ValenceHost['library']['get']>(
+        (mediaId, reading) =>
+          unnamed(reading) ??
+          Promise.resolve(library.find((media) => media.id === mediaId) ?? null),
       ),
-      search: vi.fn((query: string, kinds?: MediaRef['kind'][]) =>
-        Promise.resolve(
-          library.filter(
-            (media) =>
-              media.title.toLowerCase().includes(query.toLowerCase()) &&
-              (kinds === undefined || kinds.includes(media.kind)),
+      search: vi.fn<ValenceHost['library']['search']>(
+        (query, kinds, reading) =>
+          unnamed(reading) ??
+          Promise.resolve(
+            library.filter(
+              (media) =>
+                media.title.toLowerCase().includes(query.toLowerCase()) &&
+                (kinds === undefined || kinds.includes(media.kind)),
+            ),
           ),
-        ),
       ),
-      findByExternalId: vi.fn((source: keyof MediaRef['externalIds'], id: string) =>
-        Promise.resolve(library.filter((media) => media.externalIds[source] === id)),
+      findByExternalId: vi.fn<ValenceHost['library']['findByExternalId']>(
+        (source, id, reading) =>
+          unnamed(reading) ??
+          Promise.resolve(library.filter((media) => media.externalIds[source] === id)),
       ),
-      episodes: vi.fn((seriesId: string) =>
-        Promise.resolve(
-          library.filter((media) => media.kind === 'episode' && media.seriesId === seriesId),
-        ),
+      episodes: vi.fn<ValenceHost['library']['episodes']>(
+        (seriesId, reading) =>
+          unnamed(reading) ??
+          Promise.resolve(
+            library.filter((media) => media.kind === 'episode' && media.seriesId === seriesId),
+          ),
       ),
-      list: vi.fn<ValenceHost['library']['list']>(({ kind, after, limit = 200 }) => {
+      list: vi.fn<ValenceHost['library']['list']>(({ kind, after, limit = 200 }, reading) => {
         const ofKind = library
           .filter((media) => media.kind === kind)
           .toSorted((a, b) => a.title.localeCompare(b.title) || a.id.localeCompare(b.id));
@@ -196,57 +210,53 @@ const aHost = (options: HostOptions = {}) => {
         const items = ofKind.slice(start, start + limit);
         const last = items.at(-1);
 
-        return Promise.resolve({
-          items,
-          next: items.length < limit || last === undefined ? null : last.id,
-        });
+        return (
+          unnamed(reading) ??
+          Promise.resolve({
+            items,
+            next: items.length < limit || last === undefined ? null : last.id,
+          })
+        );
       }),
-      children: vi.fn<ValenceHost['library']['children']>((id) =>
-        Promise.resolve(
-          (options.holds?.[id] ?? []).flatMap(
-            (childId) => library.find((media) => media.id === childId) ?? [],
+      children: vi.fn<ValenceHost['library']['children']>(
+        (id, reading) =>
+          unnamed(reading) ??
+          Promise.resolve(
+            (options.holds?.[id] ?? []).flatMap(
+              (childId) => library.find((media) => media.id === childId) ?? [],
+            ),
           ),
-        ),
       ),
-      details: vi.fn<ValenceHost['library']['details']>((ids) =>
-        Promise.resolve(
-          [...new Set(ids)].flatMap((id) => {
-            const media = library.find((each) => each.id === id);
+      details: vi.fn<ValenceHost['library']['details']>(
+        (ids, reading) =>
+          unnamed(reading) ??
+          Promise.resolve(
+            [...new Set(ids)].flatMap((id) => {
+              const media = library.find((each) => each.id === id);
 
-            return media === undefined
-              ? []
-              : [
-                  {
-                    ...media,
-                    overview: null,
-                    genres: [],
-                    communityRating: null,
-                    certificationAge: null,
-                    addedAt: null,
-                    albumId: null,
-                    artistId: null,
-                    discNumber: null,
-                    trackNumber: null,
-                    file: null,
-                    ...options.details?.[id],
-                  },
-                ];
-          }),
-        ),
+              return media === undefined
+                ? []
+                : [
+                    {
+                      ...media,
+                      overview: null,
+                      genres: [],
+                      communityRating: null,
+                      certificationAge: null,
+                      addedAt: null,
+                      albumId: null,
+                      artistId: null,
+                      discNumber: null,
+                      trackNumber: null,
+                      file: null,
+                      ...options.details?.[id],
+                    },
+                  ];
+            }),
+          ),
       ),
     },
     viewing: {
-      progress: vi.fn(() =>
-        Promise.resolve(
-          [...finished].map((mediaId) => ({
-            mediaId,
-            positionSeconds: 1400,
-            durationSeconds: 1400,
-            isFinished: true,
-            updatedAt: '2026-09-28T12:00:00.000Z',
-          })),
-        ),
-      ),
       state: vi.fn<ValenceHost['viewing']['state']>((_profileId, mediaIds) =>
         Promise.resolve(
           [...new Set(mediaIds)].map((mediaId) => ({
@@ -255,6 +265,17 @@ const aHost = (options: HostOptions = {}) => {
             stars: null,
             plays: finished.has(mediaId) ? 1 : 0,
             lastPlayedAt: null,
+          })),
+        ),
+      ),
+      progress: vi.fn(() =>
+        Promise.resolve(
+          [...finished].map((mediaId) => ({
+            mediaId,
+            positionSeconds: 1400,
+            durationSeconds: 1400,
+            isFinished: true,
+            updatedAt: '2026-09-28T12:00:00.000Z',
           })),
         ),
       ),
@@ -333,7 +354,13 @@ const aHost = (options: HostOptions = {}) => {
       }),
     },
     music: {
-      findTrack: vi.fn<ValenceHost['music']['findTrack']>(({ title, artist, album }) => {
+      findTrack: vi.fn<ValenceHost['music']['findTrack']>(({ title, artist, album }, reading) => {
+        const refusal = unnamed(reading);
+
+        if (refusal !== null) {
+          return refusal;
+        }
+
         const same = (left: string | null, right: string) =>
           left !== null && left.toLowerCase() === right.toLowerCase();
         const found = library.filter(
