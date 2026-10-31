@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { vi } from 'vitest';
 import type {
+  MediaDetails,
   MediaRef,
   PlaylistContents,
   Reading,
@@ -21,14 +22,17 @@ type HostOptions = {
   finished?: string[];
   playlists?: (PlaylistContents & { profileId: string })[];
   profiles?: { id: string; name: string }[];
+  holds?: Record<string, string[]>;
+  details?: Record<string, Partial<Omit<MediaDetails, keyof MediaRef>>>;
 };
 
 /**
  * A `valence` host held in memory, for testing a plugin without a server: storage and per-person
  * secrets are maps, read back through the same JSON round trip the real host gives them, secrets
  * and keys are held to the real host's limits, the web answers as the test says, what is marked watched and
- * playlists are kept as they are changed, songs are found as Valence finds them, a library read
- * that names nobody is refused as it is in the background, and every other call is recorded.
+ * playlists are kept as they are changed, songs are found as Valence finds them, the library is
+ * listed by title and holds what the test says, a library read that names nobody is refused as it
+ * is in the background, and every other call is recorded.
  *
  * @param options - The settings, web answers, connected accounts, library and playlists this test
  *   starts with.
@@ -198,8 +202,72 @@ const aHost = (options: HostOptions = {}) => {
             library.filter((media) => media.kind === 'episode' && media.seriesId === seriesId),
           ),
       ),
+      list: vi.fn<ValenceHost['library']['list']>(({ kind, after, limit = 200 }, reading) => {
+        const ofKind = library
+          .filter((media) => media.kind === kind)
+          .toSorted((a, b) => a.title.localeCompare(b.title) || a.id.localeCompare(b.id));
+        const start = after === undefined ? 0 : ofKind.findIndex((media) => media.id === after) + 1;
+        const items = ofKind.slice(start, start + limit);
+        const last = items.at(-1);
+
+        return (
+          unnamed(reading) ??
+          Promise.resolve({
+            items,
+            next: items.length < limit || last === undefined ? null : last.id,
+          })
+        );
+      }),
+      children: vi.fn<ValenceHost['library']['children']>(
+        (id, reading) =>
+          unnamed(reading) ??
+          Promise.resolve(
+            (options.holds?.[id] ?? []).flatMap(
+              (childId) => library.find((media) => media.id === childId) ?? [],
+            ),
+          ),
+      ),
+      details: vi.fn<ValenceHost['library']['details']>(
+        (ids, reading) =>
+          unnamed(reading) ??
+          Promise.resolve(
+            [...new Set(ids)].flatMap((id) => {
+              const media = library.find((each) => each.id === id);
+
+              return media === undefined
+                ? []
+                : [
+                    {
+                      ...media,
+                      overview: null,
+                      genres: [],
+                      communityRating: null,
+                      certificationAge: null,
+                      addedAt: null,
+                      albumId: null,
+                      artistId: null,
+                      discNumber: null,
+                      trackNumber: null,
+                      file: null,
+                      ...options.details?.[id],
+                    },
+                  ];
+            }),
+          ),
+      ),
     },
     viewing: {
+      state: vi.fn<ValenceHost['viewing']['state']>((_profileId, mediaIds) =>
+        Promise.resolve(
+          [...new Set(mediaIds)].map((mediaId) => ({
+            mediaId,
+            isFavourite: false,
+            stars: null,
+            plays: finished.has(mediaId) ? 1 : 0,
+            lastPlayedAt: null,
+          })),
+        ),
+      ),
       progress: vi.fn(() =>
         Promise.resolve(
           [...finished].map((mediaId) => ({

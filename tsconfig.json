@@ -22,6 +22,7 @@
       "@ListenBrainz/*": ["./plugins/listenbrainz/src/*"],
       "@MusicImport/*": ["./plugins/music-import/src/*"],
       "@Shared/*": ["./shared/*"],
+      "@Subsonic/*": ["./plugins/subsonic/src/*"],
       "@Trakt/*": ["./plugins/trakt/src/*"]
     }
   },
