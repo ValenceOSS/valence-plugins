@@ -6,16 +6,24 @@ import type { SourceTrack } from './SourceTrack';
  * artist it credits, since a library credits "A & B" as two artists.
  *
  * @param valence - The host.
+ * @param profileId - Whose library it is looked for in.
  * @param track - The song.
  * @returns The library's id for it, or nothing where the library does not have it.
  */
-const findSongFor = async (valence: ValenceHost, track: SourceTrack): Promise<string | null> => {
+const findSongFor = async (
+  valence: ValenceHost,
+  profileId: string,
+  track: SourceTrack,
+): Promise<string | null> => {
   for (const artist of track.artists) {
-    const found = await valence.music.findTrack({
-      title: track.title,
-      artist,
-      ...(track.album === null ? {} : { album: track.album }),
-    });
+    const found = await valence.music.findTrack(
+      {
+        title: track.title,
+        artist,
+        ...(track.album === null ? {} : { album: track.album }),
+      },
+      { profileId },
+    );
 
     if (found !== null) {
       return found.id;
