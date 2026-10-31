@@ -8,14 +8,14 @@ import type { Listen } from './Listen';
  *
  * @param valence - The host.
  * @param event - What happened.
- * @returns The listen, or nothing where it is not a song with an artist.
+ * @returns The listen, or nothing where it is not a song with an artist or nobody played it.
  */
 const listenFor = async (valence: ValenceHost, event: PluginEvent): Promise<Listen | null> => {
-  if (event.mediaId === null) {
+  if (event.mediaId === null || event.profileId === null) {
     return null;
   }
 
-  const media = await valence.library.get(event.mediaId);
+  const media = await valence.library.get(event.mediaId, { profileId: event.profileId });
 
   if (media === null || media.kind !== 'track' || media.artist === null || media.artist === '') {
     return null;

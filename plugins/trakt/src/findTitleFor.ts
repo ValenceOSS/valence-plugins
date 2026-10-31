@@ -8,19 +8,22 @@ import type { TraktTitle } from './TraktWatch';
  * out, so a similar name is never mistaken for it.
  *
  * @param valence - The host.
+ * @param profileId - Whose library it is looked for in.
  * @param title - The film or show on Trakt.
  * @param kind - Which it is.
  * @returns The library's id for it, or nothing where the library has no clear match.
  */
 const findTitleFor = async (
   valence: ValenceHost,
+  profileId: string,
   title: TraktTitle,
   kind: 'film' | 'series',
 ): Promise<string | null> => {
+  const reading = { profileId };
   const byTmdb =
     title.tmdb === null
       ? undefined
-      : (await valence.library.findByExternalId('tmdb', title.tmdb)).find(
+      : (await valence.library.findByExternalId('tmdb', title.tmdb, reading)).find(
           (media) => media.kind === kind,
         );
 
@@ -31,7 +34,7 @@ const findTitleFor = async (
   const byImdb =
     title.imdb === null
       ? undefined
-      : (await valence.library.findByExternalId('imdb', title.imdb)).find((media) =>
+      : (await valence.library.findByExternalId('imdb', title.imdb, reading)).find((media) =>
           kind === 'film'
             ? media.kind === 'film'
             : media.kind === 'episode' && media.seriesId !== null,
@@ -42,7 +45,7 @@ const findTitleFor = async (
   }
 
   const wanted = normaliseTitle(title.title);
-  const matches = (await valence.library.search(title.title, [kind])).filter(
+  const matches = (await valence.library.search(title.title, [kind], reading)).filter(
     (media: MediaRef) =>
       normaliseTitle(media.title) === wanted &&
       (title.year === null || media.year === null || Math.abs(media.year - title.year) <= 1),

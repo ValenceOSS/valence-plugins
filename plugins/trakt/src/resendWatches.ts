@@ -47,6 +47,7 @@ const resendWatches = async (
 
   const outcome = await sendWatches(
     valence,
+    profileId,
     session,
     sending.map((each) => each.push),
   );

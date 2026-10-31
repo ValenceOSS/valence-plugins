@@ -1,6 +1,12 @@
 import { createHmac } from 'node:crypto';
 import { vi } from 'vitest';
-import type { MediaRef, PlaylistContents, Stored, ValenceHost } from '@ValenceSDK/host/ValenceHost';
+import type {
+  MediaRef,
+  PlaylistContents,
+  Reading,
+  Stored,
+  ValenceHost,
+} from '@ValenceSDK/host/ValenceHost';
 
 type Answer = { status: number; text: string };
 
@@ -21,8 +27,8 @@ type HostOptions = {
  * A `valence` host held in memory, for testing a plugin without a server: storage and per-person
  * secrets are maps, read back through the same JSON round trip the real host gives them, secrets
  * and keys are held to the real host's limits, the web answers as the test says, what is marked watched and
- * playlists are kept as they are changed, songs are found as Valence finds them, and every other
- * call is recorded.
+ * playlists are kept as they are changed, songs are found as Valence finds them, a library read
+ * that names nobody is refused as it is in the background, and every other call is recorded.
  *
  * @param options - The settings, web answers, connected accounts, library and playlists this test
  *   starts with.
@@ -54,6 +60,10 @@ const aHost = (options: HostOptions = {}) => {
 
     return playlist?.profileId === profileId ? playlist : null;
   };
+  const unnamed = (reading: Reading | undefined): Promise<never> | null =>
+    reading?.profileId === undefined
+      ? Promise.reject(new Error('The host refused a library read that names nobody.'))
+      : null;
   const host = {
     plugin: { id: 'test', version: '1.0.0' },
     settings: { read: vi.fn(() => Promise.resolve(options.settings ?? {})) },
@@ -160,25 +170,33 @@ const aHost = (options: HostOptions = {}) => {
       list: vi.fn(() => Promise.resolve(options.profiles ?? [{ id: 'p1', name: 'Marques' }])),
     },
     library: {
-      get: vi.fn((mediaId: string) =>
-        Promise.resolve(library.find((media) => media.id === mediaId) ?? null),
+      get: vi.fn<ValenceHost['library']['get']>(
+        (mediaId, reading) =>
+          unnamed(reading) ??
+          Promise.resolve(library.find((media) => media.id === mediaId) ?? null),
       ),
-      search: vi.fn((query: string, kinds?: MediaRef['kind'][]) =>
-        Promise.resolve(
-          library.filter(
-            (media) =>
-              media.title.toLowerCase().includes(query.toLowerCase()) &&
-              (kinds === undefined || kinds.includes(media.kind)),
+      search: vi.fn<ValenceHost['library']['search']>(
+        (query, kinds, reading) =>
+          unnamed(reading) ??
+          Promise.resolve(
+            library.filter(
+              (media) =>
+                media.title.toLowerCase().includes(query.toLowerCase()) &&
+                (kinds === undefined || kinds.includes(media.kind)),
+            ),
           ),
-        ),
       ),
-      findByExternalId: vi.fn((source: keyof MediaRef['externalIds'], id: string) =>
-        Promise.resolve(library.filter((media) => media.externalIds[source] === id)),
+      findByExternalId: vi.fn<ValenceHost['library']['findByExternalId']>(
+        (source, id, reading) =>
+          unnamed(reading) ??
+          Promise.resolve(library.filter((media) => media.externalIds[source] === id)),
       ),
-      episodes: vi.fn((seriesId: string) =>
-        Promise.resolve(
-          library.filter((media) => media.kind === 'episode' && media.seriesId === seriesId),
-        ),
+      episodes: vi.fn<ValenceHost['library']['episodes']>(
+        (seriesId, reading) =>
+          unnamed(reading) ??
+          Promise.resolve(
+            library.filter((media) => media.kind === 'episode' && media.seriesId === seriesId),
+          ),
       ),
     },
     viewing: {
@@ -268,7 +286,13 @@ const aHost = (options: HostOptions = {}) => {
       }),
     },
     music: {
-      findTrack: vi.fn<ValenceHost['music']['findTrack']>(({ title, artist, album }) => {
+      findTrack: vi.fn<ValenceHost['music']['findTrack']>(({ title, artist, album }, reading) => {
+        const refusal = unnamed(reading);
+
+        if (refusal !== null) {
+          return refusal;
+        }
+
         const same = (left: string | null, right: string) =>
           left !== null && left.toLowerCase() === right.toLowerCase();
         const found = library.filter(
