@@ -28,7 +28,7 @@ const pushProgress = async (valence: ValenceHost, event: PluginEvent): Promise<n
     return 0;
   }
 
-  const episode = await valence.library.get(mediaId);
+  const episode = await valence.library.get(mediaId, { profileId });
 
   if (episode?.kind !== 'episode' || episode.seriesId === null) {
     return 0;
@@ -42,7 +42,9 @@ const pushProgress = async (valence: ValenceHost, event: PluginEvent): Promise<n
     return 0;
   }
 
-  const at = positionsOf(await valence.library.episodes(episode.seriesId)).at.get(mediaId) ?? -1;
+  const at =
+    positionsOf(await valence.library.episodes(episode.seriesId, { profileId })).at.get(mediaId) ??
+    -1;
   const entry = [...link.data.entries]
     .reverse()
     .find(

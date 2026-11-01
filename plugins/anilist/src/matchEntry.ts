@@ -17,6 +17,7 @@ type Match = {
  * then the entry's own, for a library that keeps that season apart.
  *
  * @param valence - The host.
+ * @param profileId - Whose list it is.
  * @param entry - The list entry.
  * @param chain - The entry and the seasons before it, nearest first, where AniList knows them.
  * @returns The programme, and each season from the one it matched up to the entry with where it
@@ -24,6 +25,7 @@ type Match = {
  */
 const matchEntry = async (
   valence: ValenceHost,
+  profileId: string,
   entry: AnimeEntry,
   chain: readonly Season[] | undefined,
 ): Promise<Match | null> => {
@@ -58,6 +60,7 @@ const matchEntry = async (
   for (const [at, season] of seasons.entries()) {
     const series = await findSeriesFor(
       valence,
+      profileId,
       { ...season, anilistId: season.anilistId === '' ? null : season.anilistId },
       false,
     );
@@ -72,7 +75,7 @@ const matchEntry = async (
   const byFirstTitle =
     root === undefined || seasons.length < 2
       ? null
-      : await findSeriesFor(valence, { ...root, anilistId: null, malId: null });
+      : await findSeriesFor(valence, profileId, { ...root, anilistId: null, malId: null });
 
   if (byFirstTitle !== null) {
     return placedFrom(seasons.length - 1, byFirstTitle);
@@ -81,7 +84,7 @@ const matchEntry = async (
   const byOwnTitle =
     first === undefined
       ? null
-      : await findSeriesFor(valence, { ...first, anilistId: null, malId: null });
+      : await findSeriesFor(valence, profileId, { ...first, anilistId: null, malId: null });
 
   return byOwnTitle === null ? null : placedFrom(0, byOwnTitle);
 };

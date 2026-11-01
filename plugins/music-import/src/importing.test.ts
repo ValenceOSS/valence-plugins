@@ -39,12 +39,10 @@ describe('importing a playlist', () => {
       name: 'Running',
       description: 'Imported from Spotify',
     });
-    expect(host.music.findTrack).toHaveBeenCalledWith({
-      title: 'Song 0',
-      artist: 'Bloc Party',
-      album: 'Silent Alarm',
-      isrc: 'GB1',
-    });
+    expect(host.music.findTrack).toHaveBeenCalledWith(
+      { title: 'Song 0', artist: 'Bloc Party', album: 'Silent Alarm', isrc: 'GB1' },
+      { profileId: 'p1' },
+    );
     expect(host.playlists.add).toHaveBeenCalledWith('p1', 'playlist-1', [
       't0',
       { title: 'Song 1', artist: 'Bloc Party', album: null },

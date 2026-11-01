@@ -57,7 +57,7 @@ const carryOn = async (
     job.pages = pages ?? job.pages;
 
     for (const watch of watches) {
-      const mediaId = await findWatchFor(valence, watch, lookups);
+      const mediaId = await findWatchFor(valence, profileId, watch, lookups);
 
       job.plays += 1;
 

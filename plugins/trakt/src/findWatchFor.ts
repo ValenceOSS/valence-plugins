@@ -12,12 +12,14 @@ type Lookups = {
  * Finds the film or episode in the library that a play on Trakt was of.
  *
  * @param valence - The host.
+ * @param profileId - Whose library it is looked for in.
  * @param watch - The play.
  * @param lookups - What this run has already looked up, added to as it goes.
  * @returns The library's id for it, or nothing where the library does not have it.
  */
 const findWatchFor = async (
   valence: ValenceHost,
+  profileId: string,
   watch: TraktWatch,
   lookups: Lookups,
 ): Promise<string | null> => {
@@ -26,7 +28,7 @@ const findWatchFor = async (
   const known = lookups.titles.get(key);
   const id =
     known === undefined
-      ? await findTitleFor(valence, title, watch.kind === 'film' ? 'film' : 'series')
+      ? await findTitleFor(valence, profileId, title, watch.kind === 'film' ? 'film' : 'series')
       : known;
 
   lookups.titles.set(key, id);
@@ -35,7 +37,7 @@ const findWatchFor = async (
     return id;
   }
 
-  const episodes = lookups.episodes.get(id) ?? (await valence.library.episodes(id));
+  const episodes = lookups.episodes.get(id) ?? (await valence.library.episodes(id, { profileId }));
 
   lookups.episodes.set(id, episodes);
 

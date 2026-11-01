@@ -28,12 +28,14 @@ type Outcome = 'sent' | 'notFound' | 'nothingToSend' | 'wait' | 'uncertain' | 'r
  * apart from adding them.
  *
  * @param valence - The host.
+ * @param profileId - Whose watches they are.
  * @param session - Their Trakt session.
  * @param pushes - What was finished, and when.
  * @returns What became of them, together.
  */
 const sendWatches = async (
   valence: ValenceHost,
+  profileId: string,
   session: TraktSession,
   pushes: readonly PendingPush[],
 ): Promise<Outcome> => {
@@ -41,11 +43,11 @@ const sendWatches = async (
   const shows: object[] = [];
 
   for (const push of pushes) {
-    const media = await valence.library.get(push.mediaId);
+    const media = await valence.library.get(push.mediaId, { profileId });
     const body =
       media === null || (media.kind !== 'film' && media.kind !== 'episode')
         ? null
-        : await historyBodyFor(valence, media, push.watchedAt);
+        : await historyBodyFor(valence, profileId, media, push.watchedAt);
 
     if (body !== null && 'movies' in body && Array.isArray(body.movies)) {
       movies.push(...body.movies);

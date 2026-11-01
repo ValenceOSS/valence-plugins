@@ -1,6 +1,13 @@
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { vi } from 'vitest';
-import type { MediaRef, PlaylistContents, Stored, ValenceHost } from '@ValenceSDK/host/ValenceHost';
+import type {
+  MediaDetails,
+  MediaRef,
+  PlaylistContents,
+  Reading,
+  Stored,
+  ValenceHost,
+} from '@ValenceSDK/host/ValenceHost';
 
 type Answer = { status: number; text: string };
 
@@ -15,14 +22,18 @@ type HostOptions = {
   finished?: string[];
   playlists?: (PlaylistContents & { profileId: string })[];
   profiles?: { id: string; name: string }[];
+  holds?: Record<string, string[]>;
+  details?: Record<string, Partial<Omit<MediaDetails, keyof MediaRef>>>;
 };
 
 /**
  * A `valence` host held in memory, for testing a plugin without a server: storage and per-person
  * secrets are maps, read back through the same JSON round trip the real host gives them, secrets
  * and keys are held to the real host's limits, the web answers as the test says, what is marked watched and
- * playlists are kept as they are changed, songs are found as Valence finds them, and every other
- * call is recorded.
+ * playlists are kept as they are changed, songs are found as Valence finds them, the library is
+ * listed by title and holds what the test says, a library read that names nobody is refused as it
+ * is in the background, a job queued is handed an id, hashes and random bytes are real, and every
+ * other call is recorded.
  *
  * @param options - The settings, web answers, connected accounts, library and playlists this test
  *   starts with.
@@ -54,6 +65,12 @@ const aHost = (options: HostOptions = {}) => {
 
     return playlist?.profileId === profileId ? playlist : null;
   };
+  const unnamed = (reading: Reading | undefined): Promise<never> | null =>
+    reading?.profileId === undefined
+      ? Promise.reject(new Error('The host refused a library read that names nobody.'))
+      : null;
+  let queued = 0;
+
   const host = {
     plugin: { id: 'test', version: '1.0.0' },
     settings: { read: vi.fn(() => Promise.resolve(options.settings ?? {})) },
@@ -147,6 +164,15 @@ const aHost = (options: HostOptions = {}) => {
           ...(options.answers?.(url, init) ?? { status: 404, text: '' }),
         }),
       ),
+      fetchBytes: vi.fn<ValenceHost['http']['fetchBytes']>((url, init = {}) => {
+        const { status, text } = options.answers?.(url, init) ?? { status: 404, text: '' };
+
+        return Promise.resolve({
+          status,
+          headers: {},
+          base64: Buffer.from(text).toString('base64'),
+        });
+      }),
     },
     accounts: {
       connection: vi.fn((profileId: string, provider: string) => {
@@ -160,28 +186,100 @@ const aHost = (options: HostOptions = {}) => {
       list: vi.fn(() => Promise.resolve(options.profiles ?? [{ id: 'p1', name: 'Marques' }])),
     },
     library: {
-      get: vi.fn((mediaId: string) =>
-        Promise.resolve(library.find((media) => media.id === mediaId) ?? null),
+      get: vi.fn<ValenceHost['library']['get']>(
+        (mediaId, reading) =>
+          unnamed(reading) ??
+          Promise.resolve(library.find((media) => media.id === mediaId) ?? null),
       ),
-      search: vi.fn((query: string, kinds?: MediaRef['kind'][]) =>
-        Promise.resolve(
-          library.filter(
-            (media) =>
-              media.title.toLowerCase().includes(query.toLowerCase()) &&
-              (kinds === undefined || kinds.includes(media.kind)),
+      search: vi.fn<ValenceHost['library']['search']>(
+        (query, kinds, reading) =>
+          unnamed(reading) ??
+          Promise.resolve(
+            library.filter(
+              (media) =>
+                media.title.toLowerCase().includes(query.toLowerCase()) &&
+                (kinds === undefined || kinds.includes(media.kind)),
+            ),
           ),
-        ),
       ),
-      findByExternalId: vi.fn((source: keyof MediaRef['externalIds'], id: string) =>
-        Promise.resolve(library.filter((media) => media.externalIds[source] === id)),
+      findByExternalId: vi.fn<ValenceHost['library']['findByExternalId']>(
+        (source, id, reading) =>
+          unnamed(reading) ??
+          Promise.resolve(library.filter((media) => media.externalIds[source] === id)),
       ),
-      episodes: vi.fn((seriesId: string) =>
-        Promise.resolve(
-          library.filter((media) => media.kind === 'episode' && media.seriesId === seriesId),
-        ),
+      episodes: vi.fn<ValenceHost['library']['episodes']>(
+        (seriesId, reading) =>
+          unnamed(reading) ??
+          Promise.resolve(
+            library.filter((media) => media.kind === 'episode' && media.seriesId === seriesId),
+          ),
+      ),
+      list: vi.fn<ValenceHost['library']['list']>(({ kind, after, limit = 200 }, reading) => {
+        const ofKind = library
+          .filter((media) => media.kind === kind)
+          .toSorted((a, b) => a.title.localeCompare(b.title) || a.id.localeCompare(b.id));
+        const start = after === undefined ? 0 : ofKind.findIndex((media) => media.id === after) + 1;
+        const items = ofKind.slice(start, start + limit);
+        const last = items.at(-1);
+
+        return (
+          unnamed(reading) ??
+          Promise.resolve({
+            items,
+            next: items.length < limit || last === undefined ? null : last.id,
+          })
+        );
+      }),
+      children: vi.fn<ValenceHost['library']['children']>(
+        (id, reading) =>
+          unnamed(reading) ??
+          Promise.resolve(
+            (options.holds?.[id] ?? []).flatMap(
+              (childId) => library.find((media) => media.id === childId) ?? [],
+            ),
+          ),
+      ),
+      details: vi.fn<ValenceHost['library']['details']>(
+        (ids, reading) =>
+          unnamed(reading) ??
+          Promise.resolve(
+            [...new Set(ids)].flatMap((id) => {
+              const media = library.find((each) => each.id === id);
+
+              return media === undefined
+                ? []
+                : [
+                    {
+                      ...media,
+                      overview: null,
+                      genres: [],
+                      communityRating: null,
+                      certificationAge: null,
+                      addedAt: null,
+                      albumId: null,
+                      artistId: null,
+                      discNumber: null,
+                      trackNumber: null,
+                      file: null,
+                      ...options.details?.[id],
+                    },
+                  ];
+            }),
+          ),
       ),
     },
     viewing: {
+      state: vi.fn<ValenceHost['viewing']['state']>((_profileId, mediaIds) =>
+        Promise.resolve(
+          [...new Set(mediaIds)].map((mediaId) => ({
+            mediaId,
+            isFavourite: false,
+            stars: null,
+            plays: finished.has(mediaId) ? 1 : 0,
+            lastPlayedAt: null,
+          })),
+        ),
+      ),
       progress: vi.fn(() =>
         Promise.resolve(
           [...finished].map((mediaId) => ({
@@ -268,7 +366,13 @@ const aHost = (options: HostOptions = {}) => {
       }),
     },
     music: {
-      findTrack: vi.fn<ValenceHost['music']['findTrack']>(({ title, artist, album }) => {
+      findTrack: vi.fn<ValenceHost['music']['findTrack']>(({ title, artist, album }, reading) => {
+        const refusal = unnamed(reading);
+
+        if (refusal !== null) {
+          return refusal;
+        }
+
         const same = (left: string | null, right: string) =>
           left !== null && left.toLowerCase() === right.toLowerCase();
         const found = library.filter(
@@ -285,6 +389,14 @@ const aHost = (options: HostOptions = {}) => {
     },
     notifications: { send: vi.fn<ValenceHost['notifications']['send']>(() => Promise.resolve()) },
     events: { emit: vi.fn<ValenceHost['events']['emit']>(() => Promise.resolve()) },
+    jobs: {
+      enqueue: vi.fn<ValenceHost['jobs']['enqueue']>(() => {
+        queued += 1;
+
+        return Promise.resolve({ id: `job-${String(queued)}` });
+      }),
+      progress: vi.fn<ValenceHost['jobs']['progress']>(() => Promise.resolve()),
+    },
     crypto: {
       hmac: vi.fn<ValenceHost['crypto']['hmac']>((algorithm, key, message, encoding = 'hex') =>
         Promise.resolve(createHmac(algorithm, key).update(message).digest(encoding)),
@@ -292,6 +404,16 @@ const aHost = (options: HostOptions = {}) => {
       equal: vi.fn<ValenceHost['crypto']['equal']>((left, right) =>
         Promise.resolve(left === right),
       ),
+      digest: vi.fn<ValenceHost['crypto']['digest']>(
+        (algorithm, message, encoding = 'hex', messageEncoding = 'utf8') =>
+          Promise.resolve(
+            createHash(algorithm).update(Buffer.from(message, messageEncoding)).digest(encoding),
+          ),
+      ),
+      random: vi.fn<ValenceHost['crypto']['random']>((bytes, encoding = 'hex') =>
+        Promise.resolve(randomBytes(bytes).toString(encoding)),
+      ),
+      verify: vi.fn<ValenceHost['crypto']['verify']>(() => Promise.resolve(false)),
     },
   } satisfies ValenceHost;
 

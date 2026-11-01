@@ -60,7 +60,12 @@ const carryOn = async (
   );
 
   for (const entry of shows) {
-    const match = await matchEntry(valence, entry, chains.get(`${entry.provider}:${entry.id}`));
+    const match = await matchEntry(
+      valence,
+      profileId,
+      entry,
+      chains.get(`${entry.provider}:${entry.id}`),
+    );
 
     if (match === null) {
       job.unmatched.push(entry.titles[0] ?? entry.id);
@@ -70,7 +75,9 @@ const carryOn = async (
 
     job.matched += 1;
 
-    const { at: positions, starts } = positionsOf(await valence.library.episodes(match.series.id));
+    const { at: positions, starts } = positionsOf(
+      await valence.library.episodes(match.series.id, { profileId }),
+    );
     const snapped = new Map(
       match.seasons.map(({ season, offset }) => {
         const near =

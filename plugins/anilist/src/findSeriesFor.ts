@@ -9,20 +9,25 @@ const MOST_SEARCH_CHARACTERS = 200;
  * year no more than one out, so a similar name is never mistaken for the show.
  *
  * @param valence - The host.
+ * @param profileId - Whose library it is looked for in.
  * @param entry - The show, or one of its seasons, as the lists know it.
  * @param isByTitleToo - Whether to look by title where the ids find nothing.
  * @returns The programme, or nothing where the library has no clear match.
  */
 const findSeriesFor = async (
   valence: ValenceHost,
+  profileId: string,
   entry: { anilistId: string | null; malId: string | null; titles: string[]; year: number | null },
   isByTitleToo = true,
 ): Promise<MediaRef | null> => {
+  const reading = { profileId };
   const byId = [
     ...(entry.anilistId === null
       ? []
-      : await valence.library.findByExternalId('anilist', entry.anilistId)),
-    ...(entry.malId === null ? [] : await valence.library.findByExternalId('mal', entry.malId)),
+      : await valence.library.findByExternalId('anilist', entry.anilistId, reading)),
+    ...(entry.malId === null
+      ? []
+      : await valence.library.findByExternalId('mal', entry.malId, reading)),
   ].find((media) => media.kind === 'series');
 
   if (byId !== undefined || !isByTitleToo) {
@@ -35,7 +40,7 @@ const findSeriesFor = async (
     .map((each) => each.trim())
     .filter((each) => each !== '' && each.length <= MOST_SEARCH_CHARACTERS)
     .slice(0, 3)) {
-    const matches = (await valence.library.search(title, ['series'])).filter(
+    const matches = (await valence.library.search(title, ['series'], reading)).filter(
       (media) =>
         wanted.has(normaliseTitle(media.title)) &&
         (entry.year === null || media.year === null || Math.abs(media.year - entry.year) <= 1),

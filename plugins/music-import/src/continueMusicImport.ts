@@ -50,12 +50,15 @@ const continueMusicImport = async (
         continue;
       }
 
-      const found = await valence.music.findTrack({
-        title: song.title,
-        artist: song.artist,
-        ...(song.album === null || song.album === undefined ? {} : { album: song.album }),
-        ...(song.isrc === null ? {} : { isrc: song.isrc }),
-      });
+      const found = await valence.music.findTrack(
+        {
+          title: song.title,
+          artist: song.artist,
+          ...(song.album === null || song.album === undefined ? {} : { album: song.album }),
+          ...(song.isrc === null ? {} : { isrc: song.isrc }),
+        },
+        { profileId },
+      );
 
       if (found === null) {
         missing.push(`${song.title}, ${song.artist}`);

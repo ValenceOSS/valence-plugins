@@ -114,7 +114,7 @@ const updatePlaylist = async (
       continue;
     }
 
-    const found = await findSongFor(valence, track);
+    const found = await findSongFor(valence, profileId, track);
 
     if (found !== null) {
       update.items.push(found);

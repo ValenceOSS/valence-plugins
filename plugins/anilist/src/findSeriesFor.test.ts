@@ -21,7 +21,13 @@ describe('findSeriesFor', () => {
       library: [aMedia({ id: 's1', title: 'Something else', externalIds: { mal: '2001' } })],
     });
 
-    expect((await findSeriesFor(host, entry))?.id).toBe('s1');
+    expect((await findSeriesFor(host, 'p1', entry))?.id).toBe('s1');
+    expect(host.library.findByExternalId).toHaveBeenCalledWith('anilist', '1001', {
+      profileId: 'p1',
+    });
+    expect(host.library.findByExternalId).toHaveBeenCalledWith('mal', '2001', {
+      profileId: 'p1',
+    });
   });
 
   it('falls back to one exact title in a year close enough', async () => {
@@ -32,7 +38,9 @@ describe('findSeriesFor', () => {
       ],
     });
 
-    expect((await findSeriesFor(host, { ...entry, anilistId: null, malId: null }))?.id).toBe('s1');
+    expect((await findSeriesFor(host, 'p1', { ...entry, anilistId: null, malId: null }))?.id).toBe(
+      's1',
+    );
   });
 
   it('matches nothing when the year is too far out or two titles match', async () => {
@@ -45,15 +53,15 @@ describe('findSeriesFor', () => {
     });
     const plain = { ...entry, anilistId: null, malId: null };
 
-    expect(await findSeriesFor(far.host, plain)).toBeNull();
-    expect(await findSeriesFor(twice.host, plain)).toBeNull();
+    expect(await findSeriesFor(far.host, 'p1', plain)).toBeNull();
+    expect(await findSeriesFor(twice.host, 'p1', plain)).toBeNull();
   });
 
   it('never asks the library to search for a title it would refuse', async () => {
     const { host } = aHost({ library: [aMedia({ id: 's1', title: 'Example Quest', year: 2023 })] });
 
     expect(
-      await findSeriesFor(host, {
+      await findSeriesFor(host, 'p1', {
         ...entry,
         anilistId: null,
         malId: null,
