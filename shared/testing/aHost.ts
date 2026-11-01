@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { vi } from 'vitest';
 import type {
   MediaDetails,
@@ -32,7 +32,8 @@ type HostOptions = {
  * and keys are held to the real host's limits, the web answers as the test says, what is marked watched and
  * playlists are kept as they are changed, songs are found as Valence finds them, the library is
  * listed by title and holds what the test says, a library read that names nobody is refused as it
- * is in the background, and every other call is recorded.
+ * is in the background, a job queued is handed an id, hashes and random bytes are real, and every
+ * other call is recorded.
  *
  * @param options - The settings, web answers, connected accounts, library and playlists this test
  *   starts with.
@@ -68,6 +69,8 @@ const aHost = (options: HostOptions = {}) => {
     reading?.profileId === undefined
       ? Promise.reject(new Error('The host refused a library read that names nobody.'))
       : null;
+  let queued = 0;
+
   const host = {
     plugin: { id: 'test', version: '1.0.0' },
     settings: { read: vi.fn(() => Promise.resolve(options.settings ?? {})) },
@@ -161,6 +164,15 @@ const aHost = (options: HostOptions = {}) => {
           ...(options.answers?.(url, init) ?? { status: 404, text: '' }),
         }),
       ),
+      fetchBytes: vi.fn<ValenceHost['http']['fetchBytes']>((url, init = {}) => {
+        const { status, text } = options.answers?.(url, init) ?? { status: 404, text: '' };
+
+        return Promise.resolve({
+          status,
+          headers: {},
+          base64: Buffer.from(text).toString('base64'),
+        });
+      }),
     },
     accounts: {
       connection: vi.fn((profileId: string, provider: string) => {
@@ -377,6 +389,14 @@ const aHost = (options: HostOptions = {}) => {
     },
     notifications: { send: vi.fn<ValenceHost['notifications']['send']>(() => Promise.resolve()) },
     events: { emit: vi.fn<ValenceHost['events']['emit']>(() => Promise.resolve()) },
+    jobs: {
+      enqueue: vi.fn<ValenceHost['jobs']['enqueue']>(() => {
+        queued += 1;
+
+        return Promise.resolve({ id: `job-${String(queued)}` });
+      }),
+      progress: vi.fn<ValenceHost['jobs']['progress']>(() => Promise.resolve()),
+    },
     crypto: {
       hmac: vi.fn<ValenceHost['crypto']['hmac']>((algorithm, key, message, encoding = 'hex') =>
         Promise.resolve(createHmac(algorithm, key).update(message).digest(encoding)),
@@ -384,6 +404,16 @@ const aHost = (options: HostOptions = {}) => {
       equal: vi.fn<ValenceHost['crypto']['equal']>((left, right) =>
         Promise.resolve(left === right),
       ),
+      digest: vi.fn<ValenceHost['crypto']['digest']>(
+        (algorithm, message, encoding = 'hex', messageEncoding = 'utf8') =>
+          Promise.resolve(
+            createHash(algorithm).update(Buffer.from(message, messageEncoding)).digest(encoding),
+          ),
+      ),
+      random: vi.fn<ValenceHost['crypto']['random']>((bytes, encoding = 'hex') =>
+        Promise.resolve(randomBytes(bytes).toString(encoding)),
+      ),
+      verify: vi.fn<ValenceHost['crypto']['verify']>(() => Promise.resolve(false)),
     },
   } satisfies ValenceHost;
 
