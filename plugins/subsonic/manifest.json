@@ -1,0 +1,30 @@
+{
+  "manifestVersion": 2,
+  "id": "subsonic",
+  "name": "Subsonic music apps",
+  "version": "1.0.0",
+  "apiVersion": "^1.4",
+  "author": { "name": "Valence", "url": "https://github.com/ValenceOSS" },
+  "description": "Lets music apps that speak Subsonic or OpenSubsonic, such as Symfonium, Feishin, Amperfy and play:Sub, play your music. Each person signs their app in with an app password made in their account, and it reads only what they may see.",
+  "homepage": "https://github.com/ValenceOSS/valence-plugins/tree/main/plugins/subsonic",
+  "permissions": [
+    { "kind": "library", "access": "read" },
+    { "kind": "playlists", "access": "read" },
+    { "kind": "routes" }
+  ],
+  "contributes": {
+    "routes": [
+      {
+        "id": "rest",
+        "title": "Subsonic music apps",
+        "methods": ["GET", "POST"],
+        "signIn": [
+          { "kind": "query", "secret": "apiKey" },
+          { "kind": "query", "login": "u", "secret": "p", "hexPrefix": "enc:" },
+          { "kind": "saltedMd5", "login": "u", "token": "t", "salt": "s" }
+        ]
+      }
+    ]
+  },
+  "entry": "dist/plugin.js"
+}

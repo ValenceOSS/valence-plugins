@@ -9,6 +9,7 @@ every Valence server can install them from.
 | [Playlist import](plugins/music-import)          | Brings Spotify and Apple Music playlists into Valence, and can request the albums your library does not have yet          |
 | [Trakt](plugins/trakt)                           | Imports your Trakt watch history, marks it watched in Valence, and adds what you finish in Valence to Trakt               |
 | [ListenBrainz and Last.fm](plugins/listenbrainz) | Scrobbles what you play, and keeps Weekly Jams, Weekly Exploration, Daily Jams and your loved tracks as Valence playlists |
+| [Subsonic music apps](plugins/subsonic)          | Lets Subsonic and OpenSubsonic music apps, such as Symfonium and Feishin, play your music with an app password            |
 
 ## Installing one
 
