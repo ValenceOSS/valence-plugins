@@ -1,6 +1,7 @@
-import type { MediaDetails } from '@ValenceSDK/host/ValenceHost';
+import type { MediaDetails, ViewingState } from '@ValenceSDK/host/ValenceHost';
 import type { SubsonicBody } from './SubsonicBody';
 import { fileTypeOf } from './fileTypeOf';
+import { EPOCH } from './EPOCH';
 
 /**
  * One part of a song's path, with nothing in it that would read as another folder.
@@ -17,9 +18,10 @@ const pathPart = (part: string | null): string =>
  * never tells anybody where a file really is.
  *
  * @param track - The track's details.
+ * @param state - Whether the person liked it, and the stars they gave it.
  * @returns The song.
  */
-const songOf = (track: MediaDetails): SubsonicBody => {
+const songOf = (track: MediaDetails, state: ViewingState | null = null): SubsonicBody => {
   const type = track.file === null ? null : fileTypeOf(track.file.container);
 
   return {
@@ -48,6 +50,10 @@ const songOf = (track: MediaDetails): SubsonicBody => {
     type: 'music',
     mediaType: 'song',
     created: track.addedAt,
+    starred: state?.isFavourite === true ? (track.addedAt ?? EPOCH) : null,
+    userRating: state?.stars ?? null,
+    playCount: state?.plays ?? null,
+    played: state?.lastPlayedAt ?? null,
   };
 };
 

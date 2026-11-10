@@ -34,6 +34,16 @@ const TRACK = {
 const built = () =>
   aHost({
     library: LIBRARY,
+    lyrics: {
+      t1: {
+        isSynced: true,
+        lines: [
+          { atMs: 1000, text: 'First line' },
+          { atMs: 4000, text: 'Second line' },
+        ],
+      },
+    },
+    about: { ar1: { bio: 'A band.', sourceUrl: 'https://example.test/the-band' } },
     holds: { ar1: ['al1'], al1: ['t1', 't2'] },
     details: {
       al1: { artistId: 'ar1', genres: ['Rock'] },
@@ -53,20 +63,40 @@ const built = () =>
     ],
   });
 
-const asking = (path: string, query: Record<string, string> = {}): RouteRequest => ({
+const asking = (path: string, query: Record<string, string | string[]> = {}): RouteRequest => ({
   method: 'GET',
   path,
   query: Object.fromEntries(
-    Object.entries({ u: 'sam', f: 'json', ...query }).map(([k, v]) => [k, [v]]),
+    Object.entries({ u: 'sam', f: 'json', ...query }).map(([k, v]) => [
+      k,
+      Array.isArray(v) ? v : [v],
+    ]),
   ),
   headers: {},
   body: '',
   receivedAt: '2026-10-31T12:00:00.000Z',
 });
 
-const SAM = { profileId: 'p1', name: 'Sam' };
+const SAM = { profileId: 'p1', name: 'Sam', login: 'sam-1' };
 
-const answered = async (path: string, query: Record<string, string> = {}) => {
+/**
+ * A host and a way to ask it several things in turn as Sam, so what one call changes the next one
+ * reads.
+ *
+ * @returns The host, what it keeps, and how to ask.
+ */
+const talking = () => {
+  const made = built();
+  const ask = async (path: string, query: Record<string, string | string[]> = {}) => {
+    const answer = await answerSubsonic({ valence: made.host, person: SAM }, asking(path, query));
+
+    return 'body' in answer ? JSON.parse(answer.body)['subsonic-response'] : null;
+  };
+
+  return { ...made, ask };
+};
+
+const answered = async (path: string, query: Record<string, string | string[]> = {}) => {
   const { host } = built();
   const answer = await answerSubsonic({ valence: host, person: SAM }, asking(path, query));
 
@@ -83,6 +113,7 @@ describe('answerSubsonic', () => {
     expect((await answered('getOpenSubsonicExtensions')).json.openSubsonicExtensions).toEqual([
       { name: 'formPost', versions: [1] },
       { name: 'apiKeyAuthentication', versions: [1] },
+      { name: 'songLyrics', versions: [1] },
     ]);
   });
 
@@ -163,18 +194,22 @@ describe('answerSubsonic', () => {
   });
 
   it('answers what Valence doesn’t keep with nothing, rather than an error', async () => {
-    expect((await answered('star', { id: 't1' })).json.status).toBe('ok');
-    expect((await answered('getTopSongs', { artist: 'The Band' })).json.topSongs).toEqual({
-      song: [],
-    });
-    expect((await answered('getPlayQueue')).json.status).toBe('ok');
-    expect((await answered('getAlbumList2', { type: 'newest' })).json.albumList2).toEqual({
+    expect((await answered('getPodcasts')).json.podcasts).toEqual({ channel: [] });
+    expect((await answered('getNowPlaying')).json.nowPlaying).toEqual({ entry: [] });
+    expect((await answered('getAlbumList2', { type: 'starred' })).json.albumList2).toEqual({
       album: [],
     });
   });
 
-  it('names the person signed in, whatever the app said its user was', async () => {
-    expect((await answered('getUser', { u: 'admin' })).json.user.username).toBe('Sam');
+  it('says the person may make playlists and scrobble', async () => {
+    expect((await answered('getUser')).json.user).toMatchObject({
+      scrobblingEnabled: true,
+      playlistRole: true,
+    });
+  });
+
+  it('names the person by the login their app signed in with, whatever the app said its user was', async () => {
+    expect((await answered('getUser', { u: 'admin' })).json.user.username).toBe('sam-1');
   });
 
   it('browses folders for the older half of the API: artists, their albums, and songs', async () => {
@@ -256,9 +291,9 @@ describe('answerSubsonic', () => {
     ).toEqual([]);
   });
 
-  it('lists the person’s playlists, counting only songs the library has', async () => {
+  it('lists the person’s playlists, counting and timing only songs the library has', async () => {
     expect((await answered('getPlaylists')).json.playlists.playlist).toMatchObject([
-      { id: 'pl1', name: 'Mine', songCount: 1, owner: 'Sam' },
+      { id: 'pl1', name: 'Mine', songCount: 1, duration: 100, owner: 'sam-1' },
     ]);
     expect((await answered('getPlaylist', { id: 'pl1' })).json.playlist.entry).toMatchObject([
       { id: 't2' },
@@ -290,6 +325,275 @@ describe('answerSubsonic', () => {
       await answerSubsonic({ valence: host, person: null }, asking('ping.view')),
     ).toMatchObject({
       body: expect.stringContaining('"code":40'),
+    });
+  });
+  it('stars songs and artists, rates songs, and lists what was starred', async () => {
+    const { ask, liked, stars } = talking();
+
+    expect((await ask('star', { id: ['t1', 't2'], artistId: 'ar1', albumId: 'al1' })).status).toBe(
+      'ok',
+    );
+    expect((await ask('unstar', { id: 't2' })).status).toBe('ok');
+    expect((await ask('setRating', { id: 't1', rating: '4' })).status).toBe('ok');
+    expect([...liked]).toEqual(['t1', 'ar1']);
+    expect(stars.get('t1')).toBe(4);
+
+    const starred = (await ask('getStarred2')).starred2;
+
+    expect(starred.artist).toMatchObject([{ id: 'ar1', name: 'The Band' }]);
+    expect(starred.album).toEqual([]);
+    expect(starred.song).toMatchObject([{ id: 't1', userRating: 4, starred: expect.any(String) }]);
+    expect((await ask('getStarred')).starred.song).toHaveLength(1);
+
+    await ask('setRating', { id: 't1', rating: '0' });
+
+    expect(stars.has('t1')).toBe(false);
+    expect((await ask('star', {})).error.code).toBe(10);
+    expect((await ask('star', { id: 'nothing' })).error.code).toBe(70);
+    expect((await ask('setRating', { id: 't1' })).error.code).toBe(10);
+    expect((await ask('setRating', { id: 'nothing', rating: '3' })).error.code).toBe(70);
+  });
+
+  it('counts plays at the times the app gives, and says what it is playing', async () => {
+    const { ask, played, playing } = talking();
+
+    await ask('scrobble', { id: ['t1', 'missing', 't2'], time: ['1762000000000', '0', 'x'] });
+    await ask('scrobble', { id: 't2', submission: 'false', c: 'Feishin' });
+
+    expect(played).toEqual([
+      { profileId: 'p1', trackId: 't1', playedAt: '2025-11-01T12:26:40.000Z' },
+      { profileId: 'p1', trackId: 't2', playedAt: null },
+    ]);
+    expect(playing).toEqual([{ profileId: 'p1', trackId: 't2', client: 'Feishin' }]);
+    expect((await ask('scrobble', {})).error.code).toBe(10);
+    expect((await ask('scrobble', { id: 'al1', submission: 'false' })).error.code).toBe(70);
+  });
+
+  it('keeps the play queue for the person, and forgets it when the app saves an empty one', async () => {
+    const { ask } = talking();
+
+    expect((await ask('getPlayQueue')).playQueue).toBeUndefined();
+
+    await ask('savePlayQueue', {
+      id: ['t2', 't1'],
+      current: 't1',
+      position: '42000',
+      c: 'Feishin',
+    });
+
+    expect((await ask('getPlayQueue')).playQueue).toMatchObject({
+      current: 't1',
+      position: 42000,
+      username: 'sam-1',
+      changedBy: 'Feishin',
+      changed: '2026-10-31T12:00:00.000Z',
+      entry: [{ id: 't2' }, { id: 't1' }],
+    });
+
+    await ask('savePlayQueue', {});
+
+    expect((await ask('getPlayQueue')).playQueue).toBeUndefined();
+  });
+
+  it('makes, changes and removes the person’s playlists', async () => {
+    const { ask, playlists } = talking();
+
+    const made = (await ask('createPlaylist', { name: 'Drive', songId: ['t1', 't2'] })).playlist;
+
+    expect(made).toMatchObject({
+      name: 'Drive',
+      songCount: 2,
+      entry: [{ id: 't1' }, { id: 't2' }],
+    });
+
+    await ask('updatePlaylist', {
+      playlistId: made.id,
+      name: 'Long drive',
+      songIndexToRemove: '0',
+      songIdToAdd: 't1',
+    });
+
+    expect(playlists.get(made.id)).toMatchObject({
+      name: 'Long drive',
+      entries: [{ mediaId: 't2' }, { mediaId: 't1' }],
+    });
+
+    const replaced = (await ask('createPlaylist', { playlistId: 'pl1', songId: 't1' })).playlist;
+
+    expect(replaced.entry).toMatchObject([{ id: 't1' }]);
+    expect(playlists.get('pl1')?.entries.map((entry) => entry.mediaId)).toEqual([null, 't1']);
+
+    await ask('deletePlaylist', { id: made.id });
+
+    expect(playlists.has(made.id)).toBe(false);
+    expect((await ask('createPlaylist', {})).error.code).toBe(10);
+    expect((await ask('createPlaylist', { playlistId: 'nope' })).error.code).toBe(70);
+    expect((await ask('updatePlaylist', {})).error.code).toBe(10);
+    expect((await ask('updatePlaylist', { playlistId: 'nope' })).error.code).toBe(70);
+    expect((await ask('deletePlaylist', {})).error.code).toBe(10);
+    expect((await ask('deletePlaylist', { id: 'nope' })).error.code).toBe(70);
+  });
+
+  it('lists albums in each order an app asks for, by genre and by year', async () => {
+    const { ask, host } = talking();
+
+    for (const [type, order] of [
+      ['newest', 'added'],
+      ['recent', 'recentlyPlayed'],
+      ['frequent', 'mostPlayed'],
+      ['highest', 'rated'],
+      ['alphabeticalByArtist', 'artist'],
+    ]) {
+      expect((await ask('getAlbumList2', { type: type ?? '' })).albumList2.album).toMatchObject([
+        { id: 'al1' },
+      ]);
+      expect(host.music.albums).toHaveBeenLastCalledWith(
+        { order, offset: 0, limit: 10 },
+        { profileId: 'p1' },
+      );
+    }
+
+    await ask('getAlbumList2', { type: 'byYear', fromYear: '2010', toYear: '1990', size: '5' });
+
+    expect(host.music.albums).toHaveBeenLastCalledWith(
+      { order: 'year', offset: 0, limit: 5, years: { from: 2010, to: 1990 } },
+      { profileId: 'p1' },
+    );
+    expect(
+      (await ask('getAlbumList2', { type: 'byGenre', genre: 'Rock' })).albumList2.album,
+    ).toMatchObject([{ id: 'al1' }]);
+    expect(
+      (await ask('getAlbumList2', { type: 'byGenre', genre: 'Jazz' })).albumList2.album,
+    ).toEqual([]);
+    expect((await ask('getAlbumList2', { type: 'byGenre' })).error.code).toBe(10);
+    expect((await ask('getAlbumList2', { type: 'loudest' })).error.code).toBe(10);
+    expect((await ask('getAlbumList2', { type: 'random' })).albumList2.album).toMatchObject([
+      { id: 'al1' },
+    ]);
+  });
+
+  it('lists genres with their counts, and the songs in one', async () => {
+    const { ask } = talking();
+
+    expect((await ask('getGenres')).genres.genre).toEqual([
+      { value: 'Rock', songCount: 2, albumCount: 1 },
+    ]);
+    expect(
+      (await ask('getSongsByGenre', { genre: 'Rock', count: '1' })).songsByGenre.song,
+    ).toMatchObject([{ id: 't1' }]);
+    expect((await ask('getSongsByGenre', {})).error.code).toBe(10);
+  });
+
+  it('gives lyrics by artist and title, and timed lines by song', async () => {
+    const { ask } = talking();
+
+    expect((await ask('getLyrics', { artist: 'The Band', title: 'Opening' })).lyrics).toEqual({
+      artist: 'The Band',
+      title: 'Opening',
+      value: 'First line\nSecond line',
+    });
+    expect((await ask('getLyrics', { artist: 'The Band', title: 'Closing' })).lyrics).toEqual({});
+    expect((await ask('getLyrics', {})).lyrics).toEqual({});
+    expect((await ask('getLyricsBySongId', { id: 't1' })).lyricsList.structuredLyrics).toEqual([
+      {
+        displayArtist: 'The Band',
+        displayTitle: 'Opening',
+        lang: 'und',
+        synced: true,
+        line: [
+          { start: 1000, value: 'First line' },
+          { start: 4000, value: 'Second line' },
+        ],
+      },
+    ]);
+    expect((await ask('getLyricsBySongId', { id: 't2' })).lyricsList.structuredLyrics).toEqual([]);
+    expect((await ask('getLyricsBySongId', {})).error.code).toBe(10);
+    expect((await ask('getLyricsBySongId', { id: 'al1' })).error.code).toBe(70);
+  });
+
+  it('finds songs like a song, an album or an artist, and an artist’s most played', async () => {
+    const { ask, host } = talking();
+
+    expect((await ask('getSimilarSongs2', { id: 't1' })).similarSongs2.song).toMatchObject([
+      { id: 't2' },
+    ]);
+    expect(host.music.similar).toHaveBeenLastCalledWith(['t1'], 50, { profileId: 'p1' });
+    await ask('getSimilarSongs', { id: 'al1', count: '5' });
+    expect(host.music.similar).toHaveBeenLastCalledWith(['t1', 't2'], 5, { profileId: 'p1' });
+    expect((await ask('getSimilarSongs', { id: 'ar1' })).similarSongs.song).toEqual([]);
+    expect((await ask('getSimilarSongs2', {})).error.code).toBe(10);
+    expect((await ask('getSimilarSongs2', { id: 'nothing' })).error.code).toBe(70);
+    expect(
+      (await ask('getTopSongs', { artist: 'the band', count: '1' })).topSongs.song,
+    ).toMatchObject([{ id: 't1' }]);
+    expect((await ask('getTopSongs', { artist: 'Nobody' })).topSongs.song).toEqual([]);
+  });
+
+  it('says what Valence knows about an artist', async () => {
+    const { ask } = talking();
+
+    expect((await ask('getArtistInfo2', { id: 'ar1' })).artistInfo2).toEqual({
+      biography: 'A band.',
+      similarArtist: [],
+    });
+    expect((await ask('getArtistInfo', { id: 'al1' })).artistInfo).toEqual({ similarArtist: [] });
+    expect((await ask('getArtistInfo2', {})).error.code).toBe(10);
+  });
+
+  it('writes a genre’s name and a song’s lyrics as the text of their elements in XML', async () => {
+    const xml = async (path: string, query: Record<string, string> = {}) => {
+      const answer = await answerSubsonic(
+        { valence: talking().host, person: SAM },
+        asking(path, { ...query, f: 'xml' }),
+      );
+
+      return 'body' in answer ? answer.body : '';
+    };
+
+    expect(await xml('getGenres')).toContain('<genre songCount="2" albumCount="1">Rock</genre>');
+    expect(await xml('getLyrics', { artist: 'The Band', title: 'Opening' })).toContain(
+      '<lyrics artist="The Band" title="Opening">First line&#10;Second line</lyrics>',
+    );
+  });
+
+  it('reads every value of a parameter given more than once, from the query and a form', async () => {
+    const { host, liked } = talking();
+
+    await answerSubsonic(
+      { valence: host, person: SAM },
+      {
+        ...asking('star', { id: 't1' }),
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: 'id=t2&artistId=ar1',
+      },
+    );
+
+    expect([...liked]).toEqual(['t1', 't2', 'ar1']);
+  });
+  it('lists as many albums and genre songs as an app asks for, past Valence’s 200 at a time', async () => {
+    const { ask, host } = talking();
+
+    expect(
+      (await ask('getAlbumList2', { type: 'newest', size: '500' })).albumList2.album,
+    ).toHaveLength(1);
+    expect(host.music.albums).toHaveBeenCalledWith(
+      { order: 'added', offset: 0, limit: 200 },
+      { profileId: 'p1' },
+    );
+    expect((await ask('getSongsByGenre', { genre: 'Rock', count: '500' })).status).toBe('ok');
+    expect((await ask('getSimilarSongs2', { id: 't1', count: '500' })).status).toBe('ok');
+  });
+
+  it('serves an artist’s picture for their plain id as well as their cover id', async () => {
+    expect((await answered('getCoverArt', { id: 'ar1' })).answer).toEqual({
+      serve: { kind: 'artistImage', artistId: 'ar1' },
+    });
+    expect((await answered('getCoverArt', { id: 'ar-ar1' })).answer).toEqual({
+      serve: { kind: 'artistImage', artistId: 'ar1' },
+    });
+    expect((await answered('getCoverArt', { id: 'al1' })).answer).toEqual({
+      serve: { kind: 'albumArtwork', albumId: 'al1' },
     });
   });
 });

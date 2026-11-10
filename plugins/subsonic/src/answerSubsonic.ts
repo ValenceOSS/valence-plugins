@@ -1,6 +1,18 @@
 import type { RouteContext, RouteRequest } from '@ValenceSDK/host/PluginDefinition';
 import type { MediaRef, ValenceHost } from '@ValenceSDK/host/ValenceHost';
 import type { SubsonicBody } from './SubsonicBody';
+import type { Answering } from './Answering';
+import type { Asked } from './Asked';
+import { askedOf } from './askedOf';
+import { SUBSONIC_ERROR } from './SUBSONIC_ERROR';
+import { answerAlbumList } from './answerAlbumList';
+import { answerMusicInfo } from './answerMusicInfo';
+import type { InfoEndpoint } from './answerMusicInfo';
+import { answerPlayQueue } from './answerPlayQueue';
+import { answerPlaylistChanges } from './answerPlaylistChanges';
+import { answerScrobble } from './answerScrobble';
+import { answerStars } from './answerStars';
+import { playlistOf } from './playlistOf';
 import { albumsOf } from './albumsOf';
 import { artistOf } from './artistOf';
 import { folderOf } from './folderOf';
@@ -12,11 +24,11 @@ import { songsOf } from './songsOf';
 import { subsonicAnswer } from './subsonicAnswer';
 import type { Format } from './subsonicAnswer';
 
-const MISSING = 10;
+const MISSING = SUBSONIC_ERROR.missing;
 
-const NOT_FOUND = 70;
+const NOT_FOUND = SUBSONIC_ERROR.notFound;
 
-const GENERIC = 0;
+const GENERIC = SUBSONIC_ERROR.generic;
 
 const MOST_LISTED = 500;
 
@@ -24,32 +36,9 @@ const MOST_ARTISTS = 30_000;
 
 const MOST_FOUND = 25;
 
-const ALPHABETICAL = new Set(['alphabeticalByName', 'alphabeticalByArtist']);
-
-const NOT_KEPT = new Set([
-  'newest',
-  'recent',
-  'frequent',
-  'highest',
-  'starred',
-  'byYear',
-  'byGenre',
-]);
-
 const EMPTY: Readonly<Record<string, SubsonicBody>> = {
-  getGenres: { genres: { genre: [] } },
-  getStarred: { starred: { artist: [], album: [], song: [] } },
-  getStarred2: { starred2: { artist: [], album: [], song: [] } },
-  getArtistInfo: { artistInfo: {} },
-  getArtistInfo2: { artistInfo2: {} },
   getAlbumInfo: { albumInfo: {} },
   getAlbumInfo2: { albumInfo: {} },
-  getTopSongs: { topSongs: { song: [] } },
-  getSimilarSongs: { similarSongs: { song: [] } },
-  getSimilarSongs2: { similarSongs2: { song: [] } },
-  getSongsByGenre: { songsByGenre: { song: [] } },
-  getLyrics: { lyrics: {} },
-  getLyricsBySongId: { lyricsList: { structuredLyrics: [] } },
   getNowPlaying: { nowPlaying: { entry: [] } },
   getScanStatus: { scanStatus: { scanning: false, count: 0 } },
   getPodcasts: { podcasts: { channel: [] } },
@@ -59,71 +48,33 @@ const EMPTY: Readonly<Record<string, SubsonicBody>> = {
   getShares: { shares: { share: [] } },
   getVideos: { videos: { video: [] } },
   getChatMessages: { chatMessages: { chatMessage: [] } },
-  getPlayQueue: {},
-  savePlayQueue: {},
-  scrobble: {},
-  star: {},
-  unstar: {},
-  setRating: {},
 };
 
 const EXTENSIONS = [
   { name: 'formPost', versions: [1] },
   { name: 'apiKeyAuthentication', versions: [1] },
+  { name: 'songLyrics', versions: [1] },
 ];
 
-/**
- * Reads one part of a form as it was meant, or as it came where it isn't properly encoded.
- *
- * @param part - The encoded part.
- * @returns What it says.
- */
-const decoded = (part: string): string => {
-  const spaced = part.replace(/\+/gu, ' ');
-
-  try {
-    return decodeURIComponent(spaced);
-  } catch {
-    return spaced;
-  }
-};
-
-type Asked = {
-  text: (name: string) => string | null;
-  number: (name: string, fallback: number, most: number) => number;
-};
+const INFO: ReadonlySet<string> = new Set([
+  'getGenres',
+  'getSongsByGenre',
+  'getLyrics',
+  'getLyricsBySongId',
+  'getSimilarSongs',
+  'getSimilarSongs2',
+  'getTopSongs',
+  'getArtistInfo',
+  'getArtistInfo2',
+]);
 
 /**
- * Reads what a Subsonic app asked, from the query and from a form it posted.
+ * Whether an endpoint is one answered with what the library knows about its music.
  *
- * @param request - The request.
- * @returns How to read each parameter.
+ * @param endpoint - The endpoint.
+ * @returns Whether it is.
  */
-const askedOf = (request: RouteRequest): Asked => {
-  const form =
-    request.headers['content-type']?.startsWith('application/x-www-form-urlencoded') === true
-      ? Object.fromEntries(
-          request.body
-            .split('&')
-            .filter((pair) => pair !== '')
-            .map((pair) => {
-              const [name = '', value = ''] = pair.split('=');
-
-              return [decoded(name), decoded(value)];
-            }),
-        )
-      : {};
-  const text = (name: string): string | null => request.query[name]?.[0] ?? form[name] ?? null;
-
-  return {
-    text,
-    number: (name, fallback, most) => {
-      const read = Number(text(name) ?? Number.NaN);
-
-      return Number.isInteger(read) && read >= 0 ? Math.min(read, most) : fallback;
-    },
-  };
-};
+const isInfo = (endpoint: string): endpoint is InfoEndpoint => INFO.has(endpoint);
 
 /**
  * Answers one request from a Subsonic app, as the person whose app password signed it in.
@@ -146,6 +97,14 @@ const answerSubsonic = async ({ valence, person }: RouteContext, request: RouteR
   const { profileId } = person;
   const reading = { profileId };
   const needed = (name: string): string | null => asked.text(name);
+  const answering: Answering = {
+    valence,
+    person,
+    asked,
+    receivedAt: request.receivedAt,
+    ok,
+    failed,
+  };
 
   switch (endpoint) {
     case 'ping':
@@ -159,13 +118,13 @@ const answerSubsonic = async ({ valence, person }: RouteContext, request: RouteR
     case 'getUser':
       return ok({
         user: {
-          username: person.name,
-          scrobblingEnabled: false,
+          username: person.login,
+          scrobblingEnabled: true,
           adminRole: false,
           settingsRole: false,
           downloadRole: true,
           uploadRole: false,
-          playlistRole: false,
+          playlistRole: true,
           coverArtRole: true,
           commentRole: false,
           podcastRole: false,
@@ -269,28 +228,23 @@ const answerSubsonic = async ({ valence, person }: RouteContext, request: RouteR
       return song === undefined ? failed(NOT_FOUND, 'There is no such song.') : ok({ song });
     }
     case 'getAlbumList':
-    case 'getAlbumList2': {
-      const type = asked.text('type');
-      const size = asked.number('size', 10, MOST_LISTED);
-      const offset = asked.number('offset', 0, Number.MAX_SAFE_INTEGER);
-
-      if (type === null || (type !== 'random' && !ALPHABETICAL.has(type) && !NOT_KEPT.has(type))) {
-        return failed(MISSING, 'Say which albums with type.');
-      }
-
-      const listed = NOT_KEPT.has(type)
-        ? []
-        : type === 'random'
-          ? await randomItems(valence, profileId, 'album', size)
-          : await itemsFrom(valence, profileId, 'album', offset, size);
-      const albums = await albumsOf(valence, profileId, listed);
-
-      return ok(
-        endpoint === 'getAlbumList'
-          ? { albumList: { album: albums.map(folderOf) } }
-          : { albumList2: { album: albums } },
-      );
-    }
+    case 'getAlbumList2':
+      return answerAlbumList(answering, endpoint);
+    case 'star':
+    case 'unstar':
+    case 'setRating':
+    case 'getStarred':
+    case 'getStarred2':
+      return answerStars(answering, endpoint);
+    case 'scrobble':
+      return answerScrobble(answering);
+    case 'getPlayQueue':
+    case 'savePlayQueue':
+      return answerPlayQueue(answering, endpoint);
+    case 'createPlaylist':
+    case 'updatePlaylist':
+    case 'deletePlaylist':
+      return answerPlaylistChanges(answering, endpoint);
     case 'getRandomSongs': {
       const tracks = await randomItems(
         valence,
@@ -347,8 +301,12 @@ const answerSubsonic = async ({ valence, person }: RouteContext, request: RouteR
         return failed(MISSING, 'Say which picture with id.');
       }
 
-      return id.startsWith('ar-')
-        ? { serve: { kind: 'artistImage' as const, artistId: id.slice(3) } }
+      if (id.startsWith('ar-')) {
+        return { serve: { kind: 'artistImage' as const, artistId: id.slice(3) } };
+      }
+
+      return (await valence.library.get(id, reading))?.kind === 'artist'
+        ? { serve: { kind: 'artistImage' as const, artistId: id } }
         : { serve: { kind: 'albumArtwork' as const, albumId: id } };
     }
     case 'getPlaylists': {
@@ -358,16 +316,11 @@ const answerSubsonic = async ({ valence, person }: RouteContext, request: RouteR
       for (const playlist of kept) {
         const read = await valence.playlists.read(profileId, playlist.id);
 
-        playlists.push({
-          id: playlist.id,
-          name: playlist.name,
-          owner: person.name,
-          public: false,
-          songCount: read?.entries.filter((entry) => entry.mediaId !== null).length ?? 0,
-          duration: 0,
-          created: '1970-01-01T00:00:00.000Z',
-          changed: '1970-01-01T00:00:00.000Z',
-        });
+        if (read !== null) {
+          const { entry: _songs, ...summary } = await playlistOf(valence, person, read);
+
+          playlists.push(summary);
+        }
       }
 
       return ok({ playlists: { playlist: playlists } });
@@ -384,30 +337,13 @@ const answerSubsonic = async ({ valence, person }: RouteContext, request: RouteR
         return failed(NOT_FOUND, 'There is no such playlist.');
       }
 
-      const songs = await songsOf(
-        valence,
-        profileId,
-        read.entries.flatMap((entry) => (entry.mediaId === null ? [] : [entry.mediaId])),
-      );
-
-      return ok({
-        playlist: {
-          id: read.id,
-          name: read.name,
-          owner: person.name,
-          public: false,
-          songCount: songs.length,
-          duration: songs.reduce(
-            (all, song) => all + (typeof song.duration === 'number' ? song.duration : 0),
-            0,
-          ),
-          created: '1970-01-01T00:00:00.000Z',
-          changed: '1970-01-01T00:00:00.000Z',
-          entry: songs,
-        },
-      });
+      return ok({ playlist: await playlistOf(valence, person, read) });
     }
     default:
+      if (isInfo(endpoint)) {
+        return answerMusicInfo(answering, endpoint);
+      }
+
       return Object.hasOwn(EMPTY, endpoint)
         ? ok(EMPTY[endpoint])
         : failed(

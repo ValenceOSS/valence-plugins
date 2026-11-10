@@ -20,6 +20,16 @@ describe('toXml', () => {
     expect(toXml('song', { id: 's1', year: null })).toBe('<song id="s1"/>');
   });
 
+  it('writes a value as the element’s text, beside its attributes and children', () => {
+    expect(toXml('genre', { value: 'Rock & Roll', songCount: 2 })).toBe(
+      '<genre songCount="2">Rock &amp; Roll</genre>',
+    );
+    expect(toXml('lyrics', { value: '', artist: 'A' })).toBe('<lyrics artist="A"/>');
+    expect(toXml('line', { value: 'la', start: null, part: { id: 'p' } })).toBe(
+      '<line>la<part id="p"/></line>',
+    );
+  });
+
   it('leaves out characters XML may not hold, and keeps tabs and line breaks', () => {
     expect(toXml('song', { title: 'A\uFFFEB\uD800C\u0001D', comment: 'one\ttwo\nthree' })).toBe(
       '<song title="ABCD" comment="one&#9;two&#10;three"/>',

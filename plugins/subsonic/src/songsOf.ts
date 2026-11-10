@@ -6,7 +6,7 @@ const AT_ONCE = 200;
 
 /**
  * The songs of some tracks as a Subsonic app expects them, read as one person, leaving out any the
- * person may not see.
+ * person may not see, each with whether they liked it, the stars they gave it, and how often and when they last played it.
  *
  * @param valence - The host.
  * @param profileId - Who is reading.
@@ -21,9 +21,18 @@ const songsOf = async (
   const songs: SubsonicBody[] = [];
 
   for (let at = 0; at < ids.length; at += AT_ONCE) {
-    const read = await valence.library.details(ids.slice(at, at + AT_ONCE), { profileId });
+    const these = ids.slice(at, at + AT_ONCE);
+    const [read, states] = await Promise.all([
+      valence.library.details(these, { profileId }),
+      valence.viewing.state(profileId, these),
+    ]);
+    const stateOf = new Map(states.map((state) => [state.mediaId, state]));
 
-    songs.push(...read.filter((each) => each.kind === 'track').map(songOf));
+    songs.push(
+      ...read
+        .filter((each) => each.kind === 'track')
+        .map((track) => songOf(track, stateOf.get(track.id) ?? null)),
+    );
   }
 
   return songs;

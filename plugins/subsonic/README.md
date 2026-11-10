@@ -15,6 +15,20 @@ Apps that support OpenSubsonic's API keys can use the password alone as the key.
 
 ## What works
 
-Browsing artists, albums and songs, by tags or by folders; albums in alphabetical or random order; random songs; search, including the whole-library sync some apps run; playlists; streaming at the app's chosen bit rate or format; downloading the original file; and covers and artist pictures.
+- **Browsing and search:** artists, albums and songs, by tags or by folders, including the
+  whole-library sync some apps run.
+- **Album lists:** newest, recently played, most played, highest rated, by name, artist, year or
+  genre, and at random.
+- **Playing:** streaming at the app's chosen bit rate or format, downloading the original file,
+  and covers and artist pictures.
+- **Stars and ratings:** a starred song is a liked song in Valence, and a starred artist one you
+  follow. Ratings are your stars on a song.
+- **Plays:** what the app scrobbles counts as played in Valence, at the time it was heard, so your
+  mixes and statistics include it. While a song plays, the app shows as one of your devices.
+- **Playlists:** your playlists, which the app can make, rename, change and remove.
+- **The play queue**, kept on the server so another app can carry on where you stopped.
+- **Genres, lyrics** (timed where Valence has them), **songs like** a song, album or artist,
+  an artist's most played songs, and a few words about an artist.
 
-Starring, ratings, scrobbles and the play queue are answered but not kept yet, so lists of starred, recent, most played and newest albums are empty. Genres, lyrics, similar songs, podcasts and internet radio are answered with nothing.
+Valence keeps no liked albums or album ratings yet, so starring or rating an album is accepted but
+not kept. Podcasts, internet radio, shares and bookmarks are answered with nothing.

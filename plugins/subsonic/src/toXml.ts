@@ -19,7 +19,8 @@ const escaped = (text: string): string =>
     .replace(/\r/gu, '&#13;');
 
 /**
- * Writes one element the way Subsonic writes its XML: plain values as attributes, objects as child
+ * Writes one element the way Subsonic writes its XML: plain values as attributes, a `value` as the
+ * element's text, as OpenSubsonic names a genre's or a lyric's words in JSON, objects as child
  * elements, and a list as the same element repeated.
  *
  * @param name - The element's name.
@@ -35,7 +36,8 @@ const toXml = (name: string, value: SubsonicValue): string => {
     return value === null ? '' : `<${name}>${escaped(String(value))}</${name}>`;
   }
 
-  const body: SubsonicBody = value;
+  const { value: text = null, ...body }: SubsonicBody = value;
+  const said = text === null || typeof text === 'object' ? '' : escaped(String(text));
   const attributes = Object.entries(body)
     .filter(([, each]) => each !== null && typeof each !== 'object')
     .map(([key, each]) => ` ${key}="${escaped(String(each))}"`)
@@ -45,9 +47,9 @@ const toXml = (name: string, value: SubsonicValue): string => {
     .map(([key, each]) => toXml(key, each))
     .join('');
 
-  return children === ''
+  return children === '' && said === ''
     ? `<${name}${attributes}/>`
-    : `<${name}${attributes}>${children}</${name}>`;
+    : `<${name}${attributes}>${said}${children}</${name}>`;
 };
 
 export { toXml };
