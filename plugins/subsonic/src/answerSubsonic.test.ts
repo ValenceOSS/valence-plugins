@@ -441,6 +441,16 @@ describe('answerSubsonic', () => {
     expect((await ask('deletePlaylist', { id: 'nope' })).error.code).toBe(70);
   });
 
+  it('says a playlist change Valence refused failed, not that the playlist is missing', async () => {
+    const { ask, host } = talking();
+
+    host.playlists.add.mockRejectedValueOnce(new Error('That playlist fills itself.'));
+
+    const answer = await ask('updatePlaylist', { playlistId: 'pl1', songIdToAdd: 't1' });
+
+    expect(answer.error.code).toBe(0);
+  });
+
   it('lists albums in each order an app asks for, by genre and by year', async () => {
     const { ask, host } = talking();
 

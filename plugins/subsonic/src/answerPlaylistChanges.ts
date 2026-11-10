@@ -40,6 +40,10 @@ const answerPlaylistChanges = async (
         return failed(SUBSONIC_ERROR.missing, 'Say which playlist with id.');
       }
 
+      if ((await valence.playlists.read(profileId, id)) === null) {
+        return failed(SUBSONIC_ERROR.notFound, 'There is no such playlist.');
+      }
+
       await valence.playlists.remove(profileId, id);
 
       return ok();
@@ -136,7 +140,7 @@ const answerPlaylistChanges = async (
 
     return ok();
   } catch {
-    return failed(SUBSONIC_ERROR.notFound, 'That playlist can’t be changed.');
+    return failed(SUBSONIC_ERROR.generic, 'That playlist can’t be changed.');
   }
 };
 
