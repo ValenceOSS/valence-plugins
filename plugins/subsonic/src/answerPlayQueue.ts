@@ -2,8 +2,11 @@ import { z } from 'zod';
 import type { Answering } from './Answering';
 import type { SubsonicReply } from './subsonicAnswer';
 import { songsOf } from './songsOf';
+import { SUBSONIC_ERROR } from './SUBSONIC_ERROR';
 
 const MOST_QUEUED = 2000;
+
+const MOST_ID_CHARACTERS = 200;
 
 const QueueSchema = z.object({
   ids: z.array(z.string()).max(MOST_QUEUED),
@@ -23,13 +26,17 @@ const QueueSchema = z.object({
  * @returns The answer.
  */
 const answerPlayQueue = async (
-  { valence, person, asked, receivedAt, ok }: Answering,
+  { valence, person, asked, receivedAt, ok, failed }: Answering,
   endpoint: 'getPlayQueue' | 'savePlayQueue',
 ): Promise<SubsonicReply> => {
   const key = `queue:${person.profileId}`;
 
   if (endpoint === 'savePlayQueue') {
-    const ids = asked.texts('id').slice(0, MOST_QUEUED);
+    const ids = asked
+      .texts('id')
+      .filter((id) => id.length <= MOST_ID_CHARACTERS)
+      .slice(0, MOST_QUEUED);
+    const current = asked.text('current');
 
     if (ids.length === 0) {
       await valence.storage.delete(key);
@@ -37,15 +44,20 @@ const answerPlayQueue = async (
       return ok();
     }
 
-    await valence.storage.set(key, {
-      ids,
-      current: asked.text('current'),
-      positionMs: asked.number('position', 0, Number.MAX_SAFE_INTEGER),
-      changed: receivedAt,
-      changedBy: (asked.text('c') ?? '').slice(0, 100),
-    });
+    const saved = await valence.storage
+      .set(key, {
+        ids,
+        current: current !== null && ids.includes(current) ? current : null,
+        positionMs: asked.number('position', 0, Number.MAX_SAFE_INTEGER),
+        changed: receivedAt,
+        changedBy: (asked.text('c') ?? '').slice(0, 100),
+      })
+      .then(
+        () => true,
+        () => false,
+      );
 
-    return ok();
+    return saved ? ok() : failed(SUBSONIC_ERROR.generic, 'The play queue couldn’t be kept.');
   }
 
   const kept = QueueSchema.safeParse(await valence.storage.get(key));

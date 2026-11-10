@@ -2,6 +2,8 @@ import type { Answering } from './Answering';
 import type { SubsonicReply } from './subsonicAnswer';
 import { SUBSONIC_ERROR } from './SUBSONIC_ERROR';
 
+const MOST_CLIENT_CHARACTERS = 200;
+
 /**
  * A scrobble. One that isn't a submission says what the app has started playing, which shows on
  * the person's devices in Valence until the song would have ended. A submission counts each song
@@ -29,7 +31,7 @@ const answerScrobble = async ({
     try {
       await valence.music.nowPlaying(person.profileId, {
         trackId: ids[0] ?? '',
-        client: asked.text('c') ?? '',
+        client: (asked.text('c') ?? '').slice(0, MOST_CLIENT_CHARACTERS),
       });
     } catch {
       return failed(SUBSONIC_ERROR.notFound, 'There is no such song.');
@@ -39,14 +41,11 @@ const answerScrobble = async ({
   }
 
   for (const [at, id] of ids.entries()) {
-    const time = Number(times[at] ?? Number.NaN);
+    const heard = new Date(Number(times[at] ?? Number.NaN));
+    const isTimed = !Number.isNaN(heard.getTime()) && heard.getTime() > 0;
 
     await valence.music
-      .recordPlay(
-        person.profileId,
-        id,
-        Number.isFinite(time) && time > 0 ? new Date(time).toISOString() : undefined,
-      )
+      .recordPlay(person.profileId, id, isTimed ? heard.toISOString() : undefined)
       .catch(() => undefined);
   }
 

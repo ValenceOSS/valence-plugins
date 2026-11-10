@@ -2,6 +2,7 @@ import type { Answering } from './Answering';
 import type { SubsonicReply } from './subsonicAnswer';
 import { SUBSONIC_ERROR } from './SUBSONIC_ERROR';
 import { playlistOf } from './playlistOf';
+import { songsOf } from './songsOf';
 
 const MOST_ADDED = 500;
 
@@ -93,7 +94,19 @@ const answerPlaylistChanges = async (
       });
     }
 
-    const playable = read.entries.filter((entry) => entry.mediaId !== null);
+    const shown = new Set(
+      (
+        await songsOf(
+          valence,
+          profileId,
+          read.entries.flatMap((entry) => (entry.mediaId === null ? [] : [entry.mediaId])),
+          false,
+        )
+      ).map((song) => song['id']),
+    );
+    const playable = read.entries.filter(
+      (entry) => entry.mediaId !== null && shown.has(entry.mediaId),
+    );
     const removed = new Set(asked.texts('songIndexToRemove').map(Number));
 
     for (const [at, entry] of playable.entries()) {

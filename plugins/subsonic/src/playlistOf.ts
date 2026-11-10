@@ -10,17 +10,20 @@ import { EPOCH } from './EPOCH';
  * @param valence - The host.
  * @param person - Whose playlist it is.
  * @param playlist - What it holds.
+ * @param withSongs - Whether to give the songs too, or only how many there are and how long.
  * @returns The playlist.
  */
 const playlistOf = async (
   valence: ValenceHost,
   person: { profileId: string; name: string; login: string },
   playlist: PlaylistContents,
+  withSongs = true,
 ): Promise<SubsonicBody> => {
   const songs = await songsOf(
     valence,
     person.profileId,
     playlist.entries.flatMap((entry) => (entry.mediaId === null ? [] : [entry.mediaId])),
+    withSongs,
   );
 
   return {
@@ -35,7 +38,7 @@ const playlistOf = async (
     ),
     created: EPOCH,
     changed: EPOCH,
-    entry: songs,
+    ...(withSongs ? { entry: songs } : {}),
   };
 };
 

@@ -343,7 +343,11 @@ describe('answerSubsonic', () => {
     expect(starred.artist).toMatchObject([{ id: 'ar1', name: 'The Band' }]);
     expect(starred.album).toEqual([]);
     expect(starred.song).toMatchObject([{ id: 't1', userRating: 4, starred: expect.any(String) }]);
-    expect((await ask('getStarred')).starred.song).toHaveLength(1);
+    expect((await ask('getStarred')).starred).toMatchObject({
+      artist: [{ id: 'ar1' }],
+      album: [],
+      song: [{ id: 't1' }],
+    });
 
     await ask('setRating', { id: 't1', rating: '0' });
 
@@ -571,7 +575,7 @@ describe('answerSubsonic', () => {
 
     expect([...liked]).toEqual(['t1', 't2', 'ar1']);
   });
-  it('lists as many albums and genre songs as an app asks for, past Valence’s 200 at a time', async () => {
+  it('asks Valence for at most 200 at a time however many an app asks for', async () => {
     const { ask, host } = talking();
 
     expect(
@@ -583,6 +587,7 @@ describe('answerSubsonic', () => {
     );
     expect((await ask('getSongsByGenre', { genre: 'Rock', count: '500' })).status).toBe('ok');
     expect((await ask('getSimilarSongs2', { id: 't1', count: '500' })).status).toBe('ok');
+    expect(host.music.similar).toHaveBeenLastCalledWith(['t1'], 200, { profileId: 'p1' });
   });
 
   it('serves an artist’s picture for their plain id as well as their cover id', async () => {
@@ -595,5 +600,114 @@ describe('answerSubsonic', () => {
     expect((await answered('getCoverArt', { id: 'al1' })).answer).toEqual({
       serve: { kind: 'albumArtwork', albumId: 'al1' },
     });
+  });
+  it('shows a song held twice twice, and removes by the positions the app was shown', async () => {
+    const { ask, playlists } = talking();
+    const id = (await ask('createPlaylist', { name: 'Twice', songId: ['t1', 't2', 't1'] })).playlist
+      .id;
+
+    playlists.get(id)?.entries.splice(1, 0, { entryId: 'film', mediaId: 'ar1', missing: null });
+
+    expect(
+      (await ask('getPlaylist', { id })).playlist.entry.map((song: { id: string }) => song.id),
+    ).toEqual(['t1', 't2', 't1']);
+
+    await ask('updatePlaylist', { playlistId: id, songIndexToRemove: '2' });
+
+    expect(playlists.get(id)?.entries.map((entry) => entry.mediaId)).toEqual(['t1', 'ar1', 't2']);
+    expect((await ask('getPlaylists')).playlists.playlist).toContainEqual(
+      expect.objectContaining({ id, songCount: 2 }),
+    );
+  });
+
+  it('lists playlists without reading anyone’s likes or plays', async () => {
+    const { ask, host } = talking();
+
+    await ask('getPlaylists');
+
+    expect(host.viewing.state).not.toHaveBeenCalled();
+    expect((await ask('getPlaylists')).playlists.playlist[0]).not.toHaveProperty('entry');
+  });
+
+  it('stars what it can in a batch, and fails only when nothing could be starred', async () => {
+    const { ask, liked } = talking();
+
+    expect((await ask('star', { id: ['t1', 'gone', 't2'] })).status).toBe('ok');
+    expect([...liked]).toEqual(['t1', 't2']);
+    expect((await ask('star', { id: ['gone', 'also-gone'] })).error.code).toBe(70);
+  });
+
+  it('refuses a rating outside 0 to 5', async () => {
+    expect((await answered('setRating', { id: 't1', rating: '7' })).json.error.code).toBe(10);
+  });
+
+  it('says an artist is starred on their own page', async () => {
+    const { ask } = talking();
+
+    expect((await ask('getArtist', { id: 'ar1' })).artist).not.toHaveProperty('starred');
+
+    await ask('star', { artistId: 'ar1' });
+
+    expect((await ask('getArtist', { id: 'ar1' })).artist.starred).toEqual(expect.any(String));
+  });
+
+  it('gives artist info only for an artist, and says when there is no such thing', async () => {
+    expect((await answered('getArtistInfo2', { id: 'nothing' })).json.error.code).toBe(70);
+    expect((await answered('getArtistInfo', { id: 'al1' })).json.artistInfo).toEqual({
+      similarArtist: [],
+    });
+  });
+
+  it('writes an artist’s biography as an element in XML, as Subsonic does', async () => {
+    const answer = await answerSubsonic(
+      { valence: built().host, person: SAM },
+      asking('getArtistInfo2', { id: 'ar1', f: 'xml' }),
+    );
+
+    expect('body' in answer ? answer.body : '').toContain(
+      '<artistInfo2><biography>A band.</biography></artistInfo2>',
+    );
+  });
+
+  it('counts a scrobble whose time makes no sense as heard now, without failing the rest', async () => {
+    const { ask, played } = talking();
+
+    expect((await ask('scrobble', { id: ['t1', 't2'], time: ['1e20', '-5'] })).status).toBe('ok');
+    expect(played.map((play) => play.playedAt)).toEqual([null, null]);
+  });
+
+  it('keeps a client name and a now-playing request within what Valence accepts', async () => {
+    const { ask, playing } = talking();
+
+    await ask('scrobble', { id: 't1', submission: 'false', c: 'x'.repeat(500) });
+
+    expect(playing[0]?.client).toHaveLength(200);
+  });
+
+  it('keeps only sensible ids in a play queue, and a current song that is in it', async () => {
+    const { ask } = talking();
+
+    await ask('savePlayQueue', { id: ['t1', 'x'.repeat(300)], current: 't2' });
+
+    expect((await ask('getPlayQueue')).playQueue).toMatchObject({
+      entry: [{ id: 't1' }],
+    });
+    expect((await ask('getPlayQueue')).playQueue).not.toHaveProperty('current');
+  });
+
+  it('answers an offset past Valence’s limit and an over-long genre without failing', async () => {
+    const { ask, host } = talking();
+
+    expect((await ask('getAlbumList2', { type: 'newest', offset: '99999999' })).status).toBe('ok');
+    expect(host.music.albums).toHaveBeenLastCalledWith(
+      { order: 'added', offset: 1_000_000, limit: 10 },
+      { profileId: 'p1' },
+    );
+    expect((await ask('getSongsByGenre', { genre: 'g'.repeat(300) })).songsByGenre).toEqual({
+      song: [],
+    });
+    expect(
+      (await ask('getAlbumList2', { type: 'byGenre', genre: 'g'.repeat(300) })).albumList2,
+    ).toEqual({ album: [] });
   });
 });

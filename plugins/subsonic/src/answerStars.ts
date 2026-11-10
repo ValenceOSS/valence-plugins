@@ -8,8 +8,9 @@ import { EPOCH } from './EPOCH';
 const MOST_STARRED = 2000;
 
 /**
- * Stars and ratings: starring and unstarring songs, albums and artists, rating songs, and listing
- * what the person starred. A starred song is a liked song in Valence and a starred artist one they
+ * Stars and ratings: starring and unstarring songs, albums and artists, rating songs from 0 (no
+ * stars) to 5, and listing what the person starred. A batch stars every item it can, and fails
+ * only when none could be. A starred song is a liked song in Valence and a starred artist one they
  * follow. Valence keeps no liked albums yet, so starring one is answered without being kept, and
  * nothing is lost once it does.
  *
@@ -30,22 +31,25 @@ const answerStars = async (
       return failed(SUBSONIC_ERROR.missing, 'Say what to star with id, albumId or artistId.');
     }
 
-    try {
-      for (const id of ids) {
-        await valence.viewing.favourite(profileId, id, endpoint === 'star');
-      }
-    } catch {
-      return failed(SUBSONIC_ERROR.notFound, 'There is no such song, album or artist.');
+    let kept = 0;
+
+    for (const id of ids) {
+      kept += await valence.viewing.favourite(profileId, id, endpoint === 'star').then(
+        () => 1,
+        () => 0,
+      );
     }
 
-    return ok();
+    return kept === 0
+      ? failed(SUBSONIC_ERROR.notFound, 'There is no such song, album or artist.')
+      : ok();
   }
 
   if (endpoint === 'setRating') {
     const id = asked.text('id');
-    const rating = asked.number('rating', -1, 5);
+    const rating = asked.number('rating', -1, Number.MAX_SAFE_INTEGER);
 
-    if (id === null || rating < 0) {
+    if (id === null || rating < 0 || rating > 5) {
       return failed(SUBSONIC_ERROR.missing, 'Say what to rate with id, and how with rating.');
     }
 

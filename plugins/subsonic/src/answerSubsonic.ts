@@ -13,6 +13,7 @@ import { answerPlaylistChanges } from './answerPlaylistChanges';
 import { answerScrobble } from './answerScrobble';
 import { answerStars } from './answerStars';
 import { playlistOf } from './playlistOf';
+import { EPOCH } from './EPOCH';
 import { albumsOf } from './albumsOf';
 import { artistOf } from './artistOf';
 import { folderOf } from './folderOf';
@@ -154,13 +155,18 @@ const answerSubsonic = async ({ valence, person }: RouteContext, request: RouteR
         return failed(NOT_FOUND, 'There is no such artist.');
       }
 
-      const albums = await albumsOf(
-        valence,
-        profileId,
-        await valence.library.children(id, reading),
-      );
+      const [albums, [state]] = await Promise.all([
+        albumsOf(valence, profileId, await valence.library.children(id, reading)),
+        valence.viewing.state(profileId, [id]),
+      ]);
 
-      return ok({ artist: { ...artistOf(artist, albums.length), album: albums } });
+      return ok({
+        artist: {
+          ...artistOf(artist, albums.length),
+          starred: state?.isFavourite === true ? EPOCH : null,
+          album: albums,
+        },
+      });
     }
     case 'getMusicDirectory':
     case 'getAlbum': {
@@ -317,9 +323,7 @@ const answerSubsonic = async ({ valence, person }: RouteContext, request: RouteR
         const read = await valence.playlists.read(profileId, playlist.id);
 
         if (read !== null) {
-          const { entry: _songs, ...summary } = await playlistOf(valence, person, read);
-
-          playlists.push(summary);
+          playlists.push(await playlistOf(valence, person, read, false));
         }
       }
 

@@ -1,5 +1,15 @@
 import type { SubsonicBody, SubsonicValue } from './SubsonicBody';
 
+const TEXT_ELEMENTS: ReadonlySet<string> = new Set([
+  'biography',
+  'musicBrainzId',
+  'lastFmUrl',
+  'smallImageUrl',
+  'mediumImageUrl',
+  'largeImageUrl',
+  'notes',
+]);
+
 /**
  * Escapes text for an XML attribute, leaving out characters XML 1.0 may not hold at all, such as a
  * lone surrogate from a badly written tag, and keeping tabs and line breaks as they were.
@@ -19,8 +29,8 @@ const escaped = (text: string): string =>
     .replace(/\r/gu, '&#13;');
 
 /**
- * Writes one element the way Subsonic writes its XML: plain values as attributes, a `value` as the
- * element's text, as OpenSubsonic names a genre's or a lyric's words in JSON, objects as child
+ * Writes one element the way Subsonic writes its XML: plain values as attributes, except the few
+ * Subsonic writes as child elements, such as an artist's biography, a `value` as the element's text, as OpenSubsonic names a genre's or a lyric's words in JSON, objects as child
  * elements, and a list as the same element repeated.
  *
  * @param name - The element's name.
@@ -39,11 +49,11 @@ const toXml = (name: string, value: SubsonicValue): string => {
   const { value: text = null, ...body }: SubsonicBody = value;
   const said = text === null || typeof text === 'object' ? '' : escaped(String(text));
   const attributes = Object.entries(body)
-    .filter(([, each]) => each !== null && typeof each !== 'object')
+    .filter(([key, each]) => each !== null && typeof each !== 'object' && !TEXT_ELEMENTS.has(key))
     .map(([key, each]) => ` ${key}="${escaped(String(each))}"`)
     .join('');
   const children = Object.entries(body)
-    .filter(([, each]) => each !== null && typeof each === 'object')
+    .filter(([key, each]) => each !== null && (typeof each === 'object' || TEXT_ELEMENTS.has(key)))
     .map(([key, each]) => toXml(key, each))
     .join('');
 

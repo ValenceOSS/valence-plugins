@@ -3,11 +3,13 @@ import type { Answering } from './Answering';
 import type { SubsonicReply } from './subsonicAnswer';
 import { SUBSONIC_ERROR } from './SUBSONIC_ERROR';
 import { songsOf } from './songsOf';
-import { HOST_PAGE, inPages } from './inPages';
+import { HOST_PAGE, MOST_OFFSET, inPages } from './inPages';
 
 const MOST_LISTED = 500;
 
 const MOST_SEEDS = 50;
+
+const MOST_NAME_CHARACTERS = 200;
 
 type InfoEndpoint =
   | 'getGenres'
@@ -88,8 +90,12 @@ const answerMusicInfo = async (
         return failed(SUBSONIC_ERROR.missing, 'Say which genre with genre.');
       }
 
+      if (genre.length > MOST_NAME_CHARACTERS) {
+        return ok({ songsByGenre: { song: [] } });
+      }
+
       const found = await inPages(
-        asked.number('offset', 0, Number.MAX_SAFE_INTEGER),
+        asked.number('offset', 0, MOST_OFFSET),
         asked.number('count', 10, MOST_LISTED),
         (offset, limit) => valence.music.inGenre(genre, { offset, limit }, reading),
       );
@@ -192,17 +198,22 @@ const answerMusicInfo = async (
     case 'getArtistInfo2': {
       const id = asked.text('id');
       const found = id === null ? null : await valence.library.get(id, reading);
-      const about =
-        found?.kind === 'artist' ? await valence.music.aboutArtist(found.id, reading) : null;
-      const info = {
-        biography: about?.bio ?? null,
-        musicBrainzId: found?.externalIds.musicbrainz ?? null,
-        similarArtist: [],
-      };
 
       if (id === null) {
         return failed(SUBSONIC_ERROR.missing, 'Say which artist with id.');
       }
+
+      if (found === null) {
+        return failed(SUBSONIC_ERROR.notFound, 'There is no such artist.');
+      }
+
+      const isArtist = found.kind === 'artist';
+      const about = isArtist ? await valence.music.aboutArtist(found.id, reading) : null;
+      const info = {
+        biography: about?.bio ?? null,
+        musicBrainzId: isArtist ? (found.externalIds.musicbrainz ?? null) : null,
+        similarArtist: [],
+      };
 
       return ok(endpoint === 'getArtistInfo' ? { artistInfo: info } : { artistInfo2: info });
     }

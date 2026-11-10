@@ -1,5 +1,7 @@
 const HOST_PAGE = 200;
 
+const MOST_OFFSET = 1_000_000;
+
 /**
  * Reads as many as an app asked for from a host call that answers at most 200 at a time, a page
  * after another from where the app asked to start, stopping early where the library runs out.
@@ -30,4 +32,4 @@ const inPages = async <T>(
   return found;
 };
 
-export { HOST_PAGE, inPages };
+export { HOST_PAGE, MOST_OFFSET, inPages };

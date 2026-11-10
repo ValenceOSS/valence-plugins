@@ -5,7 +5,7 @@ import { SUBSONIC_ERROR } from './SUBSONIC_ERROR';
 import { albumsOf } from './albumsOf';
 import { folderOf } from './folderOf';
 import { randomItems } from './randomItems';
-import { inPages } from './inPages';
+import { MOST_OFFSET, inPages } from './inPages';
 
 const MOST_LISTED = 500;
 
@@ -21,6 +21,8 @@ const ORDERS: Readonly<Record<string, AlbumOrder>> = {
 };
 
 const LATEST_YEAR = 9999;
+
+const MOST_GENRE_CHARACTERS = 200;
 
 /**
  * A list of albums, in the order the app asked for: newest, recently or most played, highest
@@ -38,7 +40,7 @@ const answerAlbumList = async (
   const { profileId } = person;
   const type = asked.text('type');
   const size = asked.number('size', 10, MOST_LISTED);
-  const offset = asked.number('offset', 0, Number.MAX_SAFE_INTEGER);
+  const offset = asked.number('offset', 0, MOST_OFFSET);
   const order = type === null ? undefined : ORDERS[type];
   const genre = asked.text('genre');
 
@@ -48,6 +50,12 @@ const answerAlbumList = async (
 
   if (type === 'byGenre' && genre === null) {
     return failed(SUBSONIC_ERROR.missing, 'Say which genre with genre.');
+  }
+
+  if (genre !== null && genre.length > MOST_GENRE_CHARACTERS) {
+    return ok(
+      endpoint === 'getAlbumList' ? { albumList: { album: [] } } : { albumList2: { album: [] } },
+    );
   }
 
   const listed: MediaRef[] =
