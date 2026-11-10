@@ -1,6 +1,8 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { vi } from 'vitest';
 import type {
+  AboutArtist,
+  Lyrics,
   MediaDetails,
   MediaRef,
   PlaylistContents,
@@ -10,6 +12,12 @@ import type {
 } from '@ValenceSDK/host/ValenceHost';
 
 type Answer = { status: number; text: string };
+
+const HOST_PAGE = 200;
+
+const MOST_DROPPED = 500;
+
+const LIKED_AT = '2026-11-01T09:00:00.000Z';
 
 type HostOptions = {
   settings?: Record<string, string | boolean>;
@@ -24,6 +32,8 @@ type HostOptions = {
   profiles?: { id: string; name: string }[];
   holds?: Record<string, string[]>;
   details?: Record<string, Partial<Omit<MediaDetails, keyof MediaRef>>>;
+  lyrics?: Record<string, Lyrics>;
+  about?: Record<string, AboutArtist>;
 };
 
 /**
@@ -32,7 +42,9 @@ type HostOptions = {
  * and keys are held to the real host's limits, the web answers as the test says, what is marked watched and
  * playlists are kept as they are changed, songs are found as Valence finds them, the library is
  * listed by title and holds what the test says, a library read that names nobody is refused as it
- * is in the background, a job queued is handed an id, hashes and random bytes are real, and every
+ * is in the background, a music read asking for more than the 200 Valence allows at once is refused,
+ * songs and artists are liked and songs rated, plays and what is playing are
+ * recorded, a job queued is handed an id, hashes and random bytes are real, and every
  * other call is recorded.
  *
  * @param options - The settings, web answers, connected accounts, library and playlists this test
@@ -70,6 +82,20 @@ const aHost = (options: HostOptions = {}) => {
       ? Promise.reject(new Error('The host refused a library read that names nobody.'))
       : null;
   let queued = 0;
+  const liked = new Map<string, string>();
+  const stars = new Map<string, number>();
+  const played: { profileId: string; trackId: string; playedAt: string | null }[] = [];
+  const playing: { profileId: string; trackId: string | null; client: string | null }[] = [];
+  const kindOf = (id: string) => library.find((media) => media.id === id)?.kind ?? null;
+  const known = (id: string): Promise<never> | null =>
+    kindOf(id) === null
+      ? Promise.reject(new Error('There is no such thing in their library.'))
+      : null;
+  const genresOf = (id: string) => options.details?.[id]?.genres ?? [];
+  const tracksOf = (id: string): string[] =>
+    (options.holds?.[id] ?? []).flatMap((child) =>
+      kindOf(child) === 'track' ? [child] : tracksOf(child),
+    );
 
   const host = {
     plugin: { id: 'test', version: '1.0.0' },
@@ -273,8 +299,9 @@ const aHost = (options: HostOptions = {}) => {
         Promise.resolve(
           [...new Set(mediaIds)].map((mediaId) => ({
             mediaId,
-            isFavourite: false,
-            stars: null,
+            isFavourite: liked.has(mediaId),
+            favouritedAt: liked.get(mediaId) ?? null,
+            stars: stars.get(mediaId) ?? null,
             plays: finished.has(mediaId) ? 1 : 0,
             lastPlayedAt: null,
           })),
@@ -301,6 +328,47 @@ const aHost = (options: HostOptions = {}) => {
 
         return Promise.resolve();
       }),
+      favourite: vi.fn<ValenceHost['viewing']['favourite']>((_profileId, mediaId, isFavourite) => {
+        const kind = kindOf(mediaId);
+
+        if (kind === null) {
+          return Promise.reject(new Error('There is no such thing in their library.'));
+        }
+
+        if (kind !== 'track' && kind !== 'artist') {
+          return Promise.resolve({ isKept: false });
+        }
+
+        if (isFavourite) {
+          liked.set(mediaId, LIKED_AT);
+        } else {
+          liked.delete(mediaId);
+        }
+
+        return Promise.resolve({ isKept: true });
+      }),
+      rate: vi.fn<ValenceHost['viewing']['rate']>((_profileId, mediaId, given) => {
+        const refusal = known(mediaId);
+
+        if (refusal !== null) {
+          return refusal;
+        }
+
+        if (kindOf(mediaId) !== 'track') {
+          return Promise.resolve({ isKept: false });
+        }
+
+        if (given === null) {
+          stars.delete(mediaId);
+        } else {
+          stars.set(mediaId, given);
+        }
+
+        return Promise.resolve({ isKept: true });
+      }),
+      favourites: vi.fn<ValenceHost['viewing']['favourites']>((_profileId, kind) =>
+        Promise.resolve([...liked.keys()].filter((id) => kindOf(id) === kind)),
+      ),
     },
     requests: {
       searchCatalogue: vi.fn<ValenceHost['requests']['searchCatalogue']>(() => Promise.resolve([])),
@@ -364,6 +432,41 @@ const aHost = (options: HostOptions = {}) => {
 
         return Promise.resolve();
       }),
+      dropMany: vi.fn<ValenceHost['playlists']['dropMany']>((profileId, playlistId, entryIds) => {
+        if (entryIds.length > MOST_DROPPED) {
+          return Promise.reject(
+            new Error('playlists.dropMany was asked with something Valence could not read.'),
+          );
+        }
+
+        const playlist = playlistOf(profileId, playlistId);
+
+        if (playlist !== null) {
+          playlist.entries = playlist.entries.filter((entry) => !entryIds.includes(entry.entryId));
+        }
+
+        return Promise.resolve();
+      }),
+      rename: vi.fn<ValenceHost['playlists']['rename']>((profileId, playlistId, { name }) => {
+        const playlist = playlistOf(profileId, playlistId);
+
+        if (playlist === null) {
+          return Promise.reject(new Error('There is no such playlist of theirs.'));
+        }
+
+        playlist.name = name;
+
+        return Promise.resolve();
+      }),
+      remove: vi.fn<ValenceHost['playlists']['remove']>((profileId, playlistId) => {
+        if (playlistOf(profileId, playlistId) === null) {
+          return Promise.reject(new Error('There is no such playlist of theirs.'));
+        }
+
+        playlists.delete(playlistId);
+
+        return Promise.resolve();
+      }),
     },
     music: {
       findTrack: vi.fn<ValenceHost['music']['findTrack']>(({ title, artist, album }, reading) => {
@@ -385,6 +488,99 @@ const aHost = (options: HostOptions = {}) => {
             found[0] ??
             null,
         );
+      }),
+      albums: vi.fn<ValenceHost['music']['albums']>(({ genre, offset = 0, limit = 200 }) =>
+        limit > HOST_PAGE
+          ? Promise.reject(
+              new Error('music.albums was asked with something Valence could not read.'),
+            )
+          : Promise.resolve(
+              library
+                .filter(
+                  (media) =>
+                    media.kind === 'album' &&
+                    (genre === undefined || genresOf(media.id).includes(genre)),
+                )
+                .slice(offset, offset + limit),
+            ),
+      ),
+      genres: vi.fn<ValenceHost['music']['genres']>(() => {
+        const albums = library.filter((media) => media.kind === 'album');
+        const names = [...new Set(albums.flatMap((album) => genresOf(album.id)))];
+
+        return Promise.resolve(
+          names.map((name) => {
+            const shelved = albums.filter((album) => genresOf(album.id).includes(name));
+
+            return {
+              name,
+              albums: shelved.length,
+              songs: shelved.flatMap((album) => tracksOf(album.id)).length,
+            };
+          }),
+        );
+      }),
+      inGenre: vi.fn<ValenceHost['music']['inGenre']>((genre, page) => {
+        const offset = page?.offset ?? 0;
+
+        if ((page?.limit ?? 0) > HOST_PAGE) {
+          return Promise.reject(
+            new Error('music.inGenre was asked with something Valence could not read.'),
+          );
+        }
+        const ids = library
+          .filter((media) => media.kind === 'album' && genresOf(media.id).includes(genre))
+          .flatMap((album) => tracksOf(album.id));
+
+        return Promise.resolve(
+          ids
+            .slice(offset, offset + (page?.limit ?? 200))
+            .flatMap((id) => library.filter((media) => media.id === id)),
+        );
+      }),
+      lyrics: vi.fn<ValenceHost['music']['lyrics']>((trackId) =>
+        Promise.resolve(options.lyrics?.[trackId] ?? null),
+      ),
+      similar: vi.fn<ValenceHost['music']['similar']>((seedIds, limit = 50) =>
+        limit > HOST_PAGE
+          ? Promise.reject(
+              new Error('music.similar was asked with something Valence could not read.'),
+            )
+          : Promise.resolve(
+              library
+                .filter((media) => media.kind === 'track' && !seedIds.includes(media.id))
+                .slice(0, limit),
+            ),
+      ),
+      topSongs: vi.fn<ValenceHost['music']['topSongs']>((artistId) =>
+        Promise.resolve(
+          tracksOf(artistId).flatMap((id) => library.filter((media) => media.id === id)),
+        ),
+      ),
+      aboutArtist: vi.fn<ValenceHost['music']['aboutArtist']>((artistId) =>
+        Promise.resolve(options.about?.[artistId] ?? null),
+      ),
+      recordPlay: vi.fn<ValenceHost['music']['recordPlay']>((profileId, trackId, playedAt) => {
+        if (kindOf(trackId) !== 'track') {
+          return Promise.reject(new Error('Only a song can be played.'));
+        }
+
+        played.push({ profileId, trackId, playedAt: playedAt ?? null });
+
+        return Promise.resolve();
+      }),
+      nowPlaying: vi.fn<ValenceHost['music']['nowPlaying']>((profileId, now) => {
+        if (now !== null && kindOf(now.trackId) !== 'track') {
+          return Promise.reject(new Error('There is no such song.'));
+        }
+
+        playing.push({
+          profileId,
+          trackId: now?.trackId ?? null,
+          client: now?.client ?? null,
+        });
+
+        return Promise.resolve();
       }),
     },
     notifications: { send: vi.fn<ValenceHost['notifications']['send']>(() => Promise.resolve()) },
@@ -417,7 +613,7 @@ const aHost = (options: HostOptions = {}) => {
     },
   } satisfies ValenceHost;
 
-  return { host, stored, secrets, playlists };
+  return { host, stored, secrets, playlists, liked, stars, played, playing };
 };
 
 export { aHost };

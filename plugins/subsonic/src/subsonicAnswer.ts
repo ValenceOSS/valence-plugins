@@ -45,6 +45,8 @@ const subsonicAnswer = (
       };
 };
 
-export type { Format };
+type SubsonicReply = ReturnType<typeof subsonicAnswer>;
+
+export type { Format, SubsonicReply };
 
 export { subsonicAnswer };
