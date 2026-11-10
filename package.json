@@ -16,7 +16,7 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "@valence/plugin-sdk": "git+https://github.com/ValenceOSS/Valence.git#d1a64cbc8c20623f607898a527f20820ab238bcc&path:/packages/plugin-sdk",
+    "@valence/plugin-sdk": "git+https://github.com/ValenceOSS/Valence.git#3c000bb5d85a29e3cb5a9e1edb4cf4c1b4d5aee7&path:/packages/plugin-sdk",
     "zod": "4.6.5"
   },
   "devDependencies": {
