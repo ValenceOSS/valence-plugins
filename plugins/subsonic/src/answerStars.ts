@@ -66,9 +66,17 @@ const answerStars = async (
     valence.viewing.favourites(profileId, 'track'),
     valence.viewing.favourites(profileId, 'artist'),
   ]);
-  const artists = await valence.library.details(artistIds.slice(0, MOST_STARRED), { profileId });
+  const shownArtists = artistIds.slice(0, MOST_STARRED);
+  const [artists, artistStates] = await Promise.all([
+    valence.library.details(shownArtists, { profileId }),
+    valence.viewing.state(profileId, shownArtists),
+  ]);
+  const followedAt = new Map(artistStates.map((state) => [state.mediaId, state.favouritedAt]));
   const starred = {
-    artist: artists.map((artist) => ({ ...artistOf(artist), starred: EPOCH })),
+    artist: artists.map((artist) => ({
+      ...artistOf(artist),
+      starred: followedAt.get(artist.id) ?? EPOCH,
+    })),
     album: [],
     song: await songsOf(valence, profileId, songIds.slice(0, MOST_STARRED)),
   };

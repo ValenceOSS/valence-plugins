@@ -50,7 +50,7 @@ const songOf = (track: MediaDetails, state: ViewingState | null = null): Subsoni
     type: 'music',
     mediaType: 'song',
     created: track.addedAt,
-    starred: state?.isFavourite === true ? (track.addedAt ?? EPOCH) : null,
+    starred: state?.isFavourite === true ? (state.favouritedAt ?? EPOCH) : null,
     userRating: state?.stars ?? null,
     playCount: state?.plays ?? null,
     played: state?.lastPlayedAt ?? null,

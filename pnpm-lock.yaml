@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@valence/plugin-sdk':
-        specifier: git+https://github.com/ValenceOSS/Valence.git#d9890e5206eefea7bf21f772efe2f424b44b0463&path:/packages/plugin-sdk
-        version: https://codeload.github.com/ValenceOSS/Valence/tar.gz/d9890e5206eefea7bf21f772efe2f424b44b0463#path:/packages/plugin-sdk
+        specifier: git+https://github.com/ValenceOSS/Valence.git#d1a64cbc8c20623f607898a527f20820ab238bcc&path:/packages/plugin-sdk
+        version: https://codeload.github.com/ValenceOSS/Valence/tar.gz/d1a64cbc8c20623f607898a527f20820ab238bcc#path:/packages/plugin-sdk
       zod:
         specifier: 4.6.5
         version: 4.6.5
@@ -312,8 +312,8 @@ packages:
   '@types/node@24.19.1':
     resolution: {integrity: sha512-aS3/DG0oM05K0RIXXP+hKjinGG5IgSSVGzswZxW3O0sS3pH4/fycXundUC9XsszgKCk4gHXylTEK6hyFxVxnoQ==}
 
-  '@valence/plugin-sdk@https://codeload.github.com/ValenceOSS/Valence/tar.gz/d9890e5206eefea7bf21f772efe2f424b44b0463#path:/packages/plugin-sdk':
-    resolution: {gitHosted: true, path: /packages/plugin-sdk, tarball: https://codeload.github.com/ValenceOSS/Valence/tar.gz/d9890e5206eefea7bf21f772efe2f424b44b0463}
+  '@valence/plugin-sdk@https://codeload.github.com/ValenceOSS/Valence/tar.gz/d1a64cbc8c20623f607898a527f20820ab238bcc#path:/packages/plugin-sdk':
+    resolution: {gitHosted: true, path: /packages/plugin-sdk, tarball: https://codeload.github.com/ValenceOSS/Valence/tar.gz/d1a64cbc8c20623f607898a527f20820ab238bcc}
     version: 0.0.0
 
   '@vitest/expect@4.1.11':
@@ -781,7 +781,7 @@ snapshots:
     dependencies:
       undici-types: 7.24.6
 
-  '@valence/plugin-sdk@https://codeload.github.com/ValenceOSS/Valence/tar.gz/d9890e5206eefea7bf21f772efe2f424b44b0463#path:/packages/plugin-sdk':
+  '@valence/plugin-sdk@https://codeload.github.com/ValenceOSS/Valence/tar.gz/d1a64cbc8c20623f607898a527f20820ab238bcc#path:/packages/plugin-sdk':
     dependencies:
       zod: 4.6.4
 

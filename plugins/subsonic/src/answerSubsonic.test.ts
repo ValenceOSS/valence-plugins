@@ -335,14 +335,17 @@ describe('answerSubsonic', () => {
     );
     expect((await ask('unstar', { id: 't2' })).status).toBe('ok');
     expect((await ask('setRating', { id: 't1', rating: '4' })).status).toBe('ok');
-    expect([...liked]).toEqual(['t1', 'ar1']);
+    expect([...liked.keys()]).toEqual(['t1', 'ar1']);
     expect(stars.get('t1')).toBe(4);
 
     const starred = (await ask('getStarred2')).starred2;
 
     expect(starred.artist).toMatchObject([{ id: 'ar1', name: 'The Band' }]);
     expect(starred.album).toEqual([]);
-    expect(starred.song).toMatchObject([{ id: 't1', userRating: 4, starred: expect.any(String) }]);
+    expect(starred.song).toMatchObject([
+      { id: 't1', userRating: 4, starred: '2026-11-01T09:00:00.000Z' },
+    ]);
+    expect(starred.artist[0].starred).toBe('2026-11-01T09:00:00.000Z');
     expect((await ask('getStarred')).starred).toMatchObject({
       artist: [{ id: 'ar1' }],
       album: [],
@@ -573,7 +576,7 @@ describe('answerSubsonic', () => {
       },
     );
 
-    expect([...liked]).toEqual(['t1', 't2', 'ar1']);
+    expect([...liked.keys()]).toEqual(['t1', 't2', 'ar1']);
   });
   it('asks Valence for at most 200 at a time however many an app asks for', async () => {
     const { ask, host } = talking();
@@ -590,9 +593,9 @@ describe('answerSubsonic', () => {
     expect(host.music.similar).toHaveBeenLastCalledWith(['t1'], 200, { profileId: 'p1' });
   });
 
-  it('serves an artist’s picture for their plain id as well as their cover id', async () => {
+  it('asks Valence for a cover by any plain id, and for an artist’s picture by their cover id', async () => {
     expect((await answered('getCoverArt', { id: 'ar1' })).answer).toEqual({
-      serve: { kind: 'artistImage', artistId: 'ar1' },
+      serve: { kind: 'albumArtwork', albumId: 'ar1' },
     });
     expect((await answered('getCoverArt', { id: 'ar-ar1' })).answer).toEqual({
       serve: { kind: 'artistImage', artistId: 'ar1' },
@@ -633,7 +636,7 @@ describe('answerSubsonic', () => {
     const { ask, liked } = talking();
 
     expect((await ask('star', { id: ['t1', 'gone', 't2'] })).status).toBe('ok');
-    expect([...liked]).toEqual(['t1', 't2']);
+    expect([...liked.keys()]).toEqual(['t1', 't2']);
     expect((await ask('star', { id: ['gone', 'also-gone'] })).error.code).toBe(70);
   });
 
@@ -648,7 +651,7 @@ describe('answerSubsonic', () => {
 
     await ask('star', { artistId: 'ar1' });
 
-    expect((await ask('getArtist', { id: 'ar1' })).artist.starred).toEqual(expect.any(String));
+    expect((await ask('getArtist', { id: 'ar1' })).artist.starred).toBe('2026-11-01T09:00:00.000Z');
   });
 
   it('gives artist info only for an artist, and says when there is no such thing', async () => {

@@ -15,6 +15,10 @@ type Answer = { status: number; text: string };
 
 const HOST_PAGE = 200;
 
+const MOST_DROPPED = 500;
+
+const LIKED_AT = '2026-11-01T09:00:00.000Z';
+
 type HostOptions = {
   settings?: Record<string, string | boolean>;
   answers?: (
@@ -78,7 +82,7 @@ const aHost = (options: HostOptions = {}) => {
       ? Promise.reject(new Error('The host refused a library read that names nobody.'))
       : null;
   let queued = 0;
-  const liked = new Set<string>();
+  const liked = new Map<string, string>();
   const stars = new Map<string, number>();
   const played: { profileId: string; trackId: string; playedAt: string | null }[] = [];
   const playing: { profileId: string; trackId: string | null; client: string | null }[] = [];
@@ -296,6 +300,7 @@ const aHost = (options: HostOptions = {}) => {
           [...new Set(mediaIds)].map((mediaId) => ({
             mediaId,
             isFavourite: liked.has(mediaId),
+            favouritedAt: liked.get(mediaId) ?? null,
             stars: stars.get(mediaId) ?? null,
             plays: finished.has(mediaId) ? 1 : 0,
             lastPlayedAt: null,
@@ -335,7 +340,7 @@ const aHost = (options: HostOptions = {}) => {
         }
 
         if (isFavourite) {
-          liked.add(mediaId);
+          liked.set(mediaId, LIKED_AT);
         } else {
           liked.delete(mediaId);
         }
@@ -362,7 +367,7 @@ const aHost = (options: HostOptions = {}) => {
         return Promise.resolve({ isKept: true });
       }),
       favourites: vi.fn<ValenceHost['viewing']['favourites']>((_profileId, kind) =>
-        Promise.resolve([...liked].filter((id) => kindOf(id) === kind)),
+        Promise.resolve([...liked.keys()].filter((id) => kindOf(id) === kind)),
       ),
     },
     requests: {
@@ -423,6 +428,21 @@ const aHost = (options: HostOptions = {}) => {
 
         if (playlist !== null) {
           playlist.entries = playlist.entries.filter((entry) => entry.entryId !== entryId);
+        }
+
+        return Promise.resolve();
+      }),
+      dropMany: vi.fn<ValenceHost['playlists']['dropMany']>((profileId, playlistId, entryIds) => {
+        if (entryIds.length > MOST_DROPPED) {
+          return Promise.reject(
+            new Error('playlists.dropMany was asked with something Valence could not read.'),
+          );
+        }
+
+        const playlist = playlistOf(profileId, playlistId);
+
+        if (playlist !== null) {
+          playlist.entries = playlist.entries.filter((entry) => !entryIds.includes(entry.entryId));
         }
 
         return Promise.resolve();

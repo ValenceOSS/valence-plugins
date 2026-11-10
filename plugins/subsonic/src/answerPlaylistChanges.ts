@@ -23,6 +23,16 @@ const answerPlaylistChanges = async (
   const { profileId } = person;
 
   try {
+    const dropAll = async (playlistId: string, entryIds: readonly string[]) => {
+      for (let at = 0; at < entryIds.length; at += MOST_ADDED) {
+        await valence.playlists.dropMany(
+          profileId,
+          playlistId,
+          entryIds.slice(at, at + MOST_ADDED),
+        );
+      }
+    };
+
     if (endpoint === 'deletePlaylist') {
       const id = asked.text('id');
 
@@ -53,14 +63,13 @@ const answerPlaylistChanges = async (
           return failed(SUBSONIC_ERROR.notFound, 'There is no such playlist.');
         }
 
+        await dropAll(
+          existing,
+          read.entries.flatMap((entry) => (entry.mediaId === null ? [] : [entry.entryId])),
+        );
+
         if (name !== null) {
           await valence.playlists.rename(profileId, existing, { name });
-        }
-
-        for (const entry of read.entries) {
-          if (entry.mediaId !== null) {
-            await valence.playlists.drop(profileId, existing, entry.entryId);
-          }
         }
       }
 
@@ -109,9 +118,13 @@ const answerPlaylistChanges = async (
     );
     const removed = new Set(asked.texts('songIndexToRemove').map(Number));
 
-    for (const [at, entry] of playable.entries()) {
-      if (removed.has(at)) {
-        await valence.playlists.drop(profileId, id, entry.entryId);
+    for (let at = 0; at < playable.length; at += MOST_ADDED) {
+      const dropped = playable
+        .slice(at, at + MOST_ADDED)
+        .flatMap((entry, within) => (removed.has(at + within) ? [entry.entryId] : []));
+
+      if (dropped.length > 0) {
+        await valence.playlists.dropMany(profileId, id, dropped);
       }
     }
 

@@ -163,7 +163,7 @@ const answerSubsonic = async ({ valence, person }: RouteContext, request: RouteR
       return ok({
         artist: {
           ...artistOf(artist, albums.length),
-          starred: state?.isFavourite === true ? EPOCH : null,
+          starred: state?.isFavourite === true ? (state.favouritedAt ?? EPOCH) : null,
           album: albums,
         },
       });
@@ -311,9 +311,7 @@ const answerSubsonic = async ({ valence, person }: RouteContext, request: RouteR
         return { serve: { kind: 'artistImage' as const, artistId: id.slice(3) } };
       }
 
-      return (await valence.library.get(id, reading))?.kind === 'artist'
-        ? { serve: { kind: 'artistImage' as const, artistId: id } }
-        : { serve: { kind: 'albumArtwork' as const, albumId: id } };
+      return { serve: { kind: 'albumArtwork' as const, albumId: id } };
     }
     case 'getPlaylists': {
       const kept = await valence.playlists.list(profileId);
