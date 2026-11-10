@@ -722,5 +722,22 @@ describe('answerSubsonic', () => {
     expect(
       (await ask('getAlbumList2', { type: 'byGenre', genre: 'g'.repeat(300) })).albumList2,
     ).toEqual({ album: [] });
+
+    await ask('getAlbumList2', { type: 'newest', genre: 'g'.repeat(300) });
+
+    expect(host.music.albums).toHaveBeenLastCalledWith(
+      { order: 'added', offset: 0, limit: 10 },
+      { profileId: 'p1' },
+    );
+  });
+
+  it('says so when Valence can’t clear or read the play queue', async () => {
+    const { ask, host } = talking();
+
+    host.storage.delete.mockRejectedValueOnce(new Error('Storage is unavailable.'));
+    host.storage.get.mockRejectedValueOnce(new Error('Storage is unavailable.'));
+
+    expect((await ask('savePlayQueue', {})).error.code).toBe(0);
+    expect((await ask('getPlayQueue')).error.code).toBe(0);
   });
 });

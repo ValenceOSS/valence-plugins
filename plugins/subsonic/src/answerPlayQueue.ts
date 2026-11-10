@@ -39,9 +39,12 @@ const answerPlayQueue = async (
     const current = asked.text('current');
 
     if (ids.length === 0) {
-      await valence.storage.delete(key);
+      const cleared = await valence.storage.delete(key).then(
+        () => true,
+        () => false,
+      );
 
-      return ok();
+      return cleared ? ok() : failed(SUBSONIC_ERROR.generic, 'The play queue couldn’t be cleared.');
     }
 
     const saved = await valence.storage
@@ -60,7 +63,16 @@ const answerPlayQueue = async (
     return saved ? ok() : failed(SUBSONIC_ERROR.generic, 'The play queue couldn’t be kept.');
   }
 
-  const kept = QueueSchema.safeParse(await valence.storage.get(key));
+  const read = await valence.storage.get(key).then(
+    (value) => ({ value }),
+    () => null,
+  );
+
+  if (read === null) {
+    return failed(SUBSONIC_ERROR.generic, 'The play queue couldn’t be read.');
+  }
+
+  const kept = QueueSchema.safeParse(read.value);
 
   if (!kept.success) {
     return ok();

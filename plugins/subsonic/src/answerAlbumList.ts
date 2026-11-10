@@ -52,7 +52,7 @@ const answerAlbumList = async (
     return failed(SUBSONIC_ERROR.missing, 'Say which genre with genre.');
   }
 
-  if (genre !== null && genre.length > MOST_GENRE_CHARACTERS) {
+  if (type === 'byGenre' && genre !== null && genre.length > MOST_GENRE_CHARACTERS) {
     return ok(
       endpoint === 'getAlbumList' ? { albumList: { album: [] } } : { albumList2: { album: [] } },
     );
