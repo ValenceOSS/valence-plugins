@@ -18,7 +18,7 @@ const FIRST_UPDATE_MS = 8000;
 
 /**
  * Saves somebody's choices, and starts on each playlist they have just chosen to keep so it
- * appears soon rather than within the hour. A playlist whose service is not connected now keeps its
+ * appears soon rather than within the hour. A playlist whose service is not connected keeps its
  * choice for when it is again.
  *
  * @param context - The host and who saved.
