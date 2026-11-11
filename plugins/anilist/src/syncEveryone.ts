@@ -20,11 +20,11 @@ const OLD_PREFIXES = ['episode:', 'series:'] as const;
 /**
  * The scheduled run: carries on any import under way, and once a day reads again the lists of
  * everyone who has imported, so progress made elsewhere reaches Valence too. Nobody's list is read
- * until they import it themselves, and an import from before seasons were matched is read again at
+ * until they import it themselves, and an import whose seasons are not yet matched is read again at
  * once. Each person is taken in turn, starting a little further along each run, until the run's
  * time is up, and one person's failure never stops the rest, though AniList saying it is asked too
- * often ends the run. Anything kept for a profile that no longer exists is let go, as is what
- * earlier versions kept per episode.
+ * often ends the run. Anything kept for a profile that no longer exists is let go, as is anything
+ * kept under an `episode:` or `series:` key, which nothing writes.
  *
  * @param valence - The host.
  * @param now - The time now.
